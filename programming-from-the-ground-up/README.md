@@ -388,3 +388,167 @@ end_factorial:
 ```
 
 Finally we destroy the current stack frame, reactivate the previous one, and return control to the main program.
+
+## Chapter 5 - Dealing with Files
+
+#### Page 75-79
+
+To work with files we use the ***Unix Method***, which works as follows:
+
+1. Tell Linux the name and mode (read, write, etc.) of the file to open. For this we use the `open` system call, which takes a filename, a number representing the mode, and a permission set as parameters. `%eax` will hold the system call number, which is `5`. The address of the first character of the filename should be stored in `%ebx`. The read/write intentions, represented as a number, should be stored in `%ecx` (for example `0` is for read, and `03101` is for write). Finally, the permission set should be stored as a number in `%edx`.
+2. Linux will return a ***file descriptor*** in `%eax`. A *file descriptor* is a number used to refer to the file. You can use the *file descriptor* for reading and writing to the file. When you close the file, the *file descriptor* becomes useless.
+3. At this point is time to make read or write operations in the file. `read` is a system call `3` and to call it you need to have your *file descriptor* in `%ebx`, the address of a buffer (a continuous block of bytes used for bulk data transfer) for storing the data that is read in `%ecx`, and the size of the buffer in `%edx`. `read` will return with either the number of characters read from the file, or a negative number representing an error code. `write` is system call `4`, and requires the same parameters as `read`, except that the buffer should already be filled with the data to write out. `write` will return the number of bytes written in `%eax` or an error code.
+4. Finally tell Linux to close the file with `close`, system call `6`. The only parameter to `close` is the *file descriptor*, which is placed in `%ebx`.
+
+Buffers are a fixed size, set by the programmer. If
+you want to read in data `500` bytes at a time, you send the `read` system call the address of a 500-byte unused location, and send it the number `500` so it knows how big it is.
+
+To avoid using space in the final executable buffers can be put in the `.bss` section. The `.bss` section is like `.data`, except you cannot initialize the addresses you reserve in there, which makes it perfect for buffers. For example:
+
+```assembly
+.section .bss
+  .lcomm my_buffer, 500
+```
+
+In here we use the `lcomm` directive to create a symbol called `my_buffer` that refers to a 500-byte storage location that we can use as a buffer. Note that that 500-byte storage space is not initialized yet, thus it doesn't take space in the executable file. Assuming we are reading a file (so our *file descriptor* is in `%ebx`), we could do the following:
+
+```assembly
+movl $my_buffer, %ecx
+movl 500, %edx
+movl 3, %eax
+int  $0x80
+```
+
+Note that we use *immediate addressing mode* with `my_buffer` so we can access the value it holds which is the address of the **start** of our buffer.
+
+There are 3 *file descriptors* in Linux that don't refer to typical files, but special files (which in fact are not files but can be written or read as if they were):
+
+1. `STDIN`: This is the standard input. It is a read-only file, and usually represents your keyboard. This is always file descriptor `0`.
+2. `STDOUT`: This is the standard output. It is a write-only file, and usually represents your screen display. This is always file descriptor `1`.
+3. `STDERR`: This is your standard error. It is a write-only file, and usually represents your screen display. Most regular processing output goes to `STDOUT`, but any error messages that come up in the process go to `STDERR`. This way, if you want to, you can split them up into separate places. This is always file descriptor `2`.
+
+#### Page 88-91
+
+**Note**: In this section we explain the program [toupper.s](./chapter5/toupper.s).
+
+```assembly
+.equ SYS_OPEN, 5
+.equ SYS_WRITE, 4
+.equ SYS_READ, 3
+.equ SYS_CLOSE, 6
+.equ SYS_EXIT, 1
+
+.equ O_RDONLY, 0
+.equ O_CREAT_WRONLY_TRUNC, 03101
+
+.equ STDIN, 0
+.equ STDOUT, 1
+.equ STDERR, 2
+
+.equ LINUX_SYSCALL, 0x80
+
+.equ END_OF_FILE, 0
+
+.equ NUMBER_ARGUMENTS, 2
+```
+
+The first section is called `CONSTANTS`, in here we declare constants for system call numbers; file open modes; the standard input, output and error; the syscall interrupt, among other values. Note we use the instruction `equ` to declare a constant.
+
+```assembly
+.section .bss
+  .equ BUFFER_SIZE, 500
+  .lcomm BUFFER_DATA, BUFFER_SIZE
+```
+
+Then we have the `.bss` section we're we define a 500-byte buffer. Note that the size of the buffer itself is stored in the `BUFFER_SIZE` constant.
+
+```assembly
+.section .text
+  .equ ST_SIZE_RESERVE, 8
+  .equ ST_FD_IN, -4
+  .equ ST_FD_OUT, -8
+  .equ ST_ARGC, 0     # Number of arguments
+  .equ ST_ARGV_0, 4   # Name of program
+  .equ ST_ARGV_1, 8   # Input file name
+  .equ ST_ARGV_2, 12  # Output file name
+```
+
+Next, we have the `.text` section, and a set of constant definitions. These constants represent the position of arguments in the stack. For example the `8(%esp)` is the same as `ST_ARGV_1(%esp)`, both represent the first argument passed to a function, but the latter is clearer. It's also worth noting that `ST_SIZE_RESERVE` represent the size to reserve in stack for arguments, we do that in `_start`.
+
+Let's skip `_start` and go directly to `convert_to_upper` for a moment.
+
+```assembly
+.equ LOWERCASE_A, 'a'
+.equ LOWERCASE_Z, 'z'
+.equ UPPER_CONVERSION, 'A' - 'a'
+```
+
+These constants are put close the `convert_to_upper` function because they are only relevant to it. The first two simply define the letters that are the boundaries of what we are
+searching for. For the third one (`UPPER_CONVERSION`) we have to remember that letters are represented as numbers in memory, following the standard *ASCII*, and subtracting an upper-case letter from the same lower-case letter gives us how much we need to add to a lower-case letter to make it upper case. For example, the character `A` is `65` and the character `a` is `97`. `65 - 97 = -32`, thus adding `-32` to the *ASCII* code of a lower-case letter will gives its upper-case equivalent.
+
+```assembly
+pushl %ebp
+movl  %esp, %ebp
+
+movl ST_BUFFER(%ebp), %eax
+movl ST_BUFFER_LEN(%ebp), %ebx
+movl $0, %edi
+```
+
+The effects of the first two lines have been studied before. The next three lines do the following:
+
+1. Move the first parameter (the address of the start of the buffer) to `%eax`
+2. Move the second parameter (the buffer length, `500`) to `%ebx`
+3. Set `%edi` (which represents the current byte of the buffer) to `0`
+
+What we are going to do is iterate through each byte of the buffer by loading from the location `%eax` + `%edi`, incrementing `%edi`, and repeating until `%edi` is equal to the buffer length (500) stored in `%ebx`.
+
+```assembly
+cmpl $0, %ebx
+je   end_convert_loop
+```
+
+This is a sanity check to make sure we don't have a buffer of zero size. If we do, we don't loop at all.
+
+```assembly
+movb (%eax,%edi,1), %cl
+```
+
+Multiple things are worth noting in here:
+
+1. We are using `movb` which means we are operating at byte-level, not at word-level
+2. Then we use *indexed indirect addressing mode*, start at `%eax` go `%edi` (`0` in the first iteration, then `1`, `2`...) locations forward, with each location being `1` byte long
+3. Finally we take the result and put it in `%cl`, which is the most-significant byte of `%ecx`
+
+```assembly
+cmpb $LOWERCASE_A, %cl
+jl next_byte
+cmpb $LOWERCASE_Z, %cl
+jg next_byte
+```
+
+Next we are going to make a couple of comparissons. If the value in `%cl` is lower than `LOWERCASE_A` it means it cannot be lowercase, so we ignore it. Same if `%cl` is greater than `LOWERCASE_Z`.
+
+```assembly
+addb $UPPER_CONVERSION, %cl
+movb %cl, (%eax,%edi,1)
+```
+If the value is in fact lowercase (in other words if we didn't end up jumping before) we add the value of `UPPER_CONVERSION` (our magic number -32) to `%cl`, and store it in the same direction we got it from in the first place `(%eax,%edi,1)`. We proceed to `next_byte`.
+
+```assembly
+next_byte:
+  incl %edi
+  cmpl %edi, %ebx
+  jne convert_loop
+```
+
+In here we start by incrementing our index `%edi` and then we compare it to `%ebx` which holds the total length of the buffer. If they are not equal (in other words, if we haven't finished looping over our buffer) we jump to `convert_loop`, otherwise, we proceed to `end_convert_loop`.
+
+```assembly
+end_convert_loop:
+  movl %ebp, %esp
+  popl %ebp
+  ret
+```
+
+If we finished reading the buffer we don't return anything to the calling program (since we were modifying the buffer itself).
