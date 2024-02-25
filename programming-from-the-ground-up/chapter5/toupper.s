@@ -114,7 +114,7 @@ open_files:
     movl $0666, %edx
 
     # call Linux
-    int $LINUX_SYSCALL
+    int  $LINUX_SYSCALL
 
   store_fd_out:
     # store the file descriptor here
@@ -142,7 +142,7 @@ open_files:
     cmpl $END_OF_FILE, %eax
 
     # if found or on error, go to the end
-    jle end_loop
+    jle  end_loop
 
   continue_read_loop:
     # ## CONVERT THE BLOCK TO UPPER CASE ## #
@@ -155,18 +155,18 @@ open_files:
     # ## WRITE THE BLOCK OUT TO THE OUTPUT FILE ## #
     
     # size of the buffer
-    movl %eax, %edx
-    movl $SYS_WRITE, %eax
+    movl  %eax, %edx
+    movl  $SYS_WRITE, %eax
 
     # file to use
-    movl ST_FD_OUT(%ebp), %ebx
+    movl  ST_FD_OUT(%ebp), %ebx
 
     # location of the buffer
-    movl $BUFFER_DATA, %ecx
-    int  $LINUX_SYSCALL
+    movl  $BUFFER_DATA, %ecx
+    int   $LINUX_SYSCALL
 
     # ## CONTINUE THE LOOP ## #
-    jmp  read_loop_begin
+    jmp   read_loop_begin
 
   end_loop:
     # ## CLOSE THE FILES ## #
@@ -223,14 +223,14 @@ convert_to_upper:
   movl  %esp, %ebp
 
   # ## SET UP VARIABLES ## #
-  movl ST_BUFFER(%ebp), %eax
-  movl ST_BUFFER_LEN(%ebp), %ebx
-  movl $0, %edi
+  movl  ST_BUFFER(%ebp), %eax
+  movl  ST_BUFFER_LEN(%ebp), %ebx
+  movl  $0, %edi
 
   # if a buffer with zero length was given
   # to us, just leave
-  cmpl $0, %ebx
-  je   end_convert_loop
+  cmpl  $0, %ebx
+  je    end_convert_loop
 
 convert_loop:
   # get the current byte
@@ -239,9 +239,9 @@ convert_loop:
   # go to the next byte unless it is between
   # 'a' and 'z'
   cmpb $LOWERCASE_A, %cl
-  jl next_byte
+  jl   next_byte
   cmpb $LOWERCASE_Z, %cl
-  jg next_byte
+  jg   next_byte
 
   # otherwise convert the byte to uppercase
   addb $UPPER_CONVERSION, %cl
@@ -254,7 +254,7 @@ next_byte:
   cmpl %edi, %ebx  # continue unless
                    # we've reached the
                    # end
-  jne convert_loop
+  jne  convert_loop
 
 end_convert_loop:
   # no return value, just leave
