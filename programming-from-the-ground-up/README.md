@@ -427,7 +427,7 @@ There are 3 *file descriptors* in Linux that don't refer to typical files, but s
 2. `STDOUT`: This is the standard output. It is a write-only file, and usually represents your screen display. This is always file descriptor `1`.
 3. `STDERR`: This is your standard error. It is a write-only file, and usually represents your screen display. Most regular processing output goes to `STDOUT`, but any error messages that come up in the process go to `STDERR`. This way, if you want to, you can split them up into separate places. This is always file descriptor `2`.
 
-#### Page 88-91
+#### Page 88-93
 
 **Note**: In this section we explain the program [toupper.s](./chapter5/toupper.s).
 
@@ -552,3 +552,90 @@ end_convert_loop:
 ```
 
 If we finished reading the buffer we don't return anything to the calling program (since we were modifying the buffer itself).
+
+It's worth noting that we will be operating on the files passed as arguments on the command-line, but how is that possible!? Simple, when a Linux program begins (i.e. when we call `./toupper toupper.s toupper.uppercase`) all pointers to command-line arguments are stored on the stack. The number of arguments is stored at `8(%esp)`, the name of the program is stored at `12(%esp)`, and the arguments are stored from `16(%esp)` on.
+
+```assembly
+_start:
+  movl %esp, %ebp
+  subl $ST_SIZE_RESERVE, %esp
+```
+The first thing our program does is save the current stack position in `%ebp` and then reserve some space on the stack to store the file descriptors. After this, it starts opening files.
+
+```assembly
+open_fd_in:
+  movl $SYS_OPEN, %eax
+  movl ST_ARGV_1(%ebp), %ebx
+  movl $O_RDONLY, %ecx
+  movl $0666, %edx
+  int  $LINUX_SYSCALL
+
+store_fd_in:
+  movl %eax, ST_FD_IN(%ebp)
+```
+
+First we open the input file, which is the first command-line argument. We do this by setting up the system call. We put the system call number into `%eax`, the file name into `%ebx`, the read-only mode number into `%ecx`, and the default mode of `$0666` into `%edx`. After the system call, the file is open and the file descriptor is stored in `%eax`. The file descriptor is then transferred to it's appropriate place on the stack.
+
+```assembly
+open_fd_out:
+  movl $SYS_OPEN, %eax
+  movl ST_ARGV_2(%ebp), %ebx
+  movl $O_CREAT_WRONLY_TRUNC, %ecx
+  movl $0666, %edx
+  int  $LINUX_SYSCALL
+
+store_fd_out:
+  movl %eax, ST_FD_OUT(%ebp)
+```
+
+The same is then done for the output file, except that it is created with a write-only, create-if-doesn't-exist, truncate-if-does-exist mode. Its file descriptor is stored as well.
+
+```assembly
+read_loop_begin:
+  movl $SYS_READ, %eax
+  movl ST_FD_IN(%ebp), %ebx
+  movl $BUFFER_DATA, %ecx
+  movl $BUFFER_SIZE, %edx
+  int  $LINUX_SYSCALL
+  cmpl $END_OF_FILE, %eax
+  jle  end_loop
+```
+
+The first part of the loop is to read the data. This uses the `read` system call. This call just takes a file descriptor to read from (`%ebx`), a buffer to write into (`%ecx`), and the size of the buffer (`%edx`). The system call returns the number of bytes actually read, or end-of-file (`0`).
+
+After reading a block, we check `%eax` for an end-of-file marker. If found, it exits the loop. Otherwise we keep on going.
+
+
+```assembly
+continue_read_loop:
+  pushl $BUFFER_DATA
+  pushl %eax
+  call  convert_to_upper
+  popl  %eax
+  addl  $4, %esp
+  movl  %eax, %edx
+  movl  $SYS_WRITE, %eax
+  movl  ST_FD_OUT(%ebp), %ebx
+  movl  $BUFFER_DATA, %ecx
+  int   $LINUX_SYSCALL
+  jmp   read_loop_begin
+```
+
+After the data is read, the `convert_to_upper` function is called with the buffer we just read in and the number of characters read in the previous system call (stored in `%eax`). After this function executes, the buffer should be capitalized and ready to write out. The registers are then restored with what they had before.
+
+Finally, we issue a write system call, which is exactly like the read system call, except that it moves the data from the buffer out to the file. Now we just go back to the beginning of the loop.
+
+```assembly
+end_loop:
+  movl $SYS_CLOSE, %eax
+  movl ST_FD_OUT(%ebp), %ebx
+  int  $LINUX_SYSCALL
+  movl $SYS_CLOSE, %eax
+  movl ST_FD_IN(%ebp), %ebx
+  int  $LINUX_SYSCALL
+  movl $SYS_EXIT, %eax
+  movl $0, %ebx
+  int  $LINUX_SYSCALL
+```
+
+After the loop exits, it simply closes its file descriptors and exits. The close system call just takes the file descriptor to close in `%ebx`.
