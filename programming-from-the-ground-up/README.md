@@ -639,3 +639,91 @@ end_loop:
 ```
 
 After the loop exits, it simply closes its file descriptors and exits. The close system call just takes the file descriptor to close in `%ebx`.
+
+## Chapter 6 - Reading and Writing Simple Records
+
+#### Page 97-99
+
+We will write three programs in this chapter using the structure defined in [record-def.s](./chapter6/record-def.s). The first program will build a file containing several records using the following structure:
+
+- Firstname - 40 bytes
+- Lastname - 40 bytes
+- Address - 240 bytes
+- Age - 4 bytes
+
+The second program will display the records in the file. The third program will add 1 year to the age of every record.
+
+There are several constants that we are going to use in these programs, they'll be defined in [linux.s](./chapter6/linux.s). In addition to these constants, there are also two functions that we will be using in several of the programs - one which reads a record ([read-record.s](./chapter6/read-record.s)) and one which writes a record ([write-record.s](./chapter6/write-record.s)).
+
+#### Page 100-104
+
+**Note**: In this section we explain the program [write-records.s](./chapter6/write-records.s).
+
+```assembly
+.include "linux.s"
+.include "record-def.s"
+```
+
+The `include` statement cause the given file to basically be pasted right there in the code. There is no need to do this with functions, because the linker can take care of combining functions exported with `.globl`. However, constants defined in another file do need to be imported in this way.
+
+```assembly
+record1:
+  .ascii "Fredrick\0"
+  .rept 31 # Padding to 40 bytes
+  .byte 0
+  .endr
+```
+
+The `.rept` directive repeats the contents of the file between the `.rept` and the `.endr` directives the number of times specified after .rept. This is usually used to pad values in the `.data` section. We are using it to add null characters to the end of each field until they are their defined lengths.
+
+To build this program we run the following commands:
+
+```bash
+as write-records.s -o write-records.o --32
+as write-record.s -o write-record.o --32
+ld -m elf_i386 write-record.o write-records.o -o write-records
+```
+
+Here we are assembling two different files separately (`write-records.s` and `write-record.s`. Our program and our function definition file) and then taking the two object files and combining them together when linking.
+
+Running the program will cause a file called `test.dat` containing the records to be created. However, since they contain non-printable characters (the null character, specifically), they may not be viewable by a text editor. Therefore we need the next program to read them for us.
+
+#### Page 105-110
+
+**Note**: In this section we explain the program [read-records.s](./chapter6/read-records.s).
+
+For this program we will need a function that counts the characters of a string until it finds a null character (like the C `strlen` function does). That function is [count-chars.s](./chapter6/count-chars.s), and the code is pretty straightforward.
+
+We'll also need a function for writing a new line character (`\n`), in our case it will be [write-newline.s](./chapter6/write-newline.s).
+
+```assembly
+pushl $RECORD_FIRSTNAME + record_buffer
+```
+
+This line in [read-records.s](./chapter6/read-records.s) deserves special attention. Both `RECORD_FIRSTNAME` and `record_buffer` are constants. The former is a literal constant (defined via `.equ`) while the latter is a label that will point to the address of the directives that proceed it. What the line does is adding the values of both these constants and then push them into the stack. So if `RECORD_FIRSTNAME` is `10` and `record_buffer` is `1200`, the pushed value will be the sum of them (`1210`), which is the address pointing to the first name member of the record stored in `record_buffer`.
+
+```bash
+as read-record.s -o read-record.o --32
+as count-chars.s -o count-chars.o --32
+as write-newline.s -o write-newline.o  --32
+as read-records.s -o read-records.o  --32
+ld -m elf_i386 read-record.o count-chars.o write-newline.o \
+read-records.o -o read-records
+```
+
+Finally we assemble the four files `read-record.s`, `count-chars.s`, `write-newline.s`, `read-records.s` that compound our program, and then we link the resulting object files into an executable called `read-records`.
+
+#### Page 111-114
+
+**Note**: In this section we explain the program [add-year.s](./chapter6/add-year.s).
+
+Since this program doesn't introduce new directives or concepts we will skip the explanation. Reading the source file can be used as a form of documentation.
+
+```bash
+as add-year.s -o add-year.o --32
+as read-record.s -o read-record.o --32
+as write-record.s -o write-record.o --32
+ld -m elf_i386 add-year.o read-record.o write-record.o -o add-year
+```
+
+Assembling and linking the program can be done using the commands above.
