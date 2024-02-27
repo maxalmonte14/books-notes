@@ -727,3 +727,37 @@ ld -m elf_i386 add-year.o read-record.o write-record.o -o add-year
 ```
 
 Assembling and linking the program can be done using the commands above.
+
+## Chapter 7 - Developing Robust Programs
+
+**Note**: The lack of content in this chapter is due to it being more about good practices in programming in general and less about Assembly.
+
+#### Page 123-126
+
+**Note**: In this section we explain the program [add-year](./chapter7/add-year.s). This is a re-write of what we did in chapter 6, therefore there's a different file for it. The point of the program is exiting gracefully if it cannot open the inout file.
+
+The new version of [add-year](./chapter7/add-year.s) will depend on an external function declared in [error-exit](./chapter7/error-exit.s).
+
+```assembly
+cmpl $0, %eax
+jg   continue_processing
+
+pushl $no_open_file_msg
+pushl $no_open_file_code
+call  error_exit
+```
+
+After opening the file (`test.dat`) for reading we add the above lines to check we didn't get an error code (a negative number). If we didn't, we continue with the program execution, otherwise we exit with the message `Can't Open Input File`. **It is important to note** that there is an error in the book, instead of `jg continue_processing`, the author wrote `jl continue_processing`, making the program continue its execution **only if we received an error code while opening the file**, which is the opposite of what they intended.
+
+```bash
+as add-year.s -o add-year.o --32
+as error-exit.s -o error-exit.o --32
+as write-newline.s -o write-newline.o --32
+as read-record.s -o read-record.o --32
+as write-record.s -o write-record.o --32
+as count-chars.s -o count-chars.o --32
+ld -m elf_i386 add-year.o write-newline.o error-exit.o read-record.o write-record.o count-chars.o -o add-year
+```
+
+The needed commands for assembling and linking.
+
