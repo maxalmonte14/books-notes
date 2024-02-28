@@ -761,3 +761,190 @@ ld -m elf_i386 add-year.o write-newline.o error-exit.o read-record.o write-recor
 
 The needed commands for assembling and linking.
 
+## Chapter 8 - Sharing Functions with Code Libraries
+
+#### Page 130-133
+
+**Note**: In this section we explain the program [helloworld-lib](./chapter8/helloworld-lib.s), which access the C language library. An analogous program called [helloworld-nolib](./chapter8/helloworld-nolib.s) was written to demonstrate how to get the same results only using assembly directives.
+
+```assembly
+.section .data
+  helloworld:
+    .ascii "hello world\n\0"
+
+.globl _start
+
+_start:
+  pushl $helloworld
+  call  printf
+  pushl $0
+  call  exit
+```
+
+This is our whole program. In comparisson to [helloworld-nolib](./chapter8/helloworld-nolib.s), this is much shorter. The lines to take note of here are `call  printf` and `call  exit`. Functions `printf` and `exit` are provided by the C library.
+
+```bash
+as helloworld-lib.s -o helloworld-lib.o --32
+ld -dynamic-linker /lib/ld-linux.so.2 -m elf_i386 -o helloworld-lib helloworld-lib.o -lc
+```
+
+The program [helloworld-lib](./chapter8/helloworld-lib.s) has be linked using a different method. The `-dynamic-linker` option for the `ld` command, allows our program to be linked to libraries. This builds the executable so that before executing, the operating system will load the program `/lib/ld-linux.so.2` to load in external libraries and link them with the program. This program is known as a dynamic linker.
+
+The `-lc` option says to link to the C library (`libc.so`).
+
+**Note**: I ran into a lot of trouble trying to get the linker to work. Fortunately I found the answer I needed in [this 12 years old StackOverflow question](https://stackoverflow.com/questions/7954093/linking-c-function-lib-to-x86-assembly-program-in-modern-64bit-linux). I just needed to install the 32-bit C-runtime, which can be done with the following command:
+
+```bash
+sudo apt-get install libc6-dev-i386
+```
+
+When using shared libraries the program is ***dynamically-linked*** (as oppossed to ***statically-linked*** i.e. what we've been doing so far), which means that not all of the code needed to run the program is actually contained
+within the executable, but in external libraries.
+
+*Dynamically linking* our last program doesn't actually add any code to it, it just notes in the program where to look for the missing symbols.
+
+When the [helloworld-lib](./chapter8/helloworld-lib.s) program begins, the file `/lib/ld-linux.so.2` is loaded. This is the ***dynamic linker***. This looks at our program and sees that it needs the C library to run. So, it searches for a file called `libc.so` in the standard places (listed in `/etc/ld.so.conf` and in the contents of the `LD_LIBRARY_PATH` environment variable), then looks in it for all the needed symbols (`printf` and `exit` in this case), and then loads the library into the program's virtual memory. Finally, it replaces all instances of `printf` in the program with the actual location of `printf` in the library.
+
+Running `ldd ./helloworld-lib` will return the libraries linked to the program, and their location in the operating system.
+
+#### Page 136-137
+
+**Note**: In this section we explain the program [printf-example](./chapter8/printf-example.s).
+
+```assembly
+.section .data
+  firststring:
+    .ascii "Hello! %s is a %s who loves the number %d\n\0"
+  name:
+    .ascii "Johnatahn\0"
+  personstring:
+    .ascii "person\0"
+  numberloved:
+    .long 3
+
+.section .text
+.globl _start
+
+_start:
+  pushl numberloved
+  pushl $personstring
+  pushl $name
+  pushl $firststring
+  call  printf
+  pushl $0
+  call  exit
+```
+
+In this little program we are calling `printf` with multiple parameters, that's because the function's ***prototype*** looks like this:
+
+```c
+int printf(char *string, ...);
+```
+
+Simply put, it will take a memory address pointing to a string of characters as its first argument, and then it can accept an indefinite number of arguments. These extra arguments are going to replace markers like `%s` and `%d` in the string passed as first argument.
+
+So when we push our multiple parameters to `printf`, one is representing our original string of characters, and the rest are the replacement for the markers in it.
+
+Notice that we are pushing the arguments in the reverse order. This is done because functions can receive a variable number of arguments. Pushing our values in the reversed order will put them in a predictable order in the stack (first the string of characters we want to print, and then the replacement for the markers).
+
+```bash
+as printf-example.s -o printf-example.o --32
+ld -m elf_i386 printf-example.o -o printf-example -lc -dynamic-linker /lib/ld-linux.so.2
+```
+
+Above we have the needed commands for assembling and linking (for the sake of completion).
+
+#### Page 138-140
+
+Here we list a set of data types and keywords very useful when reading function prototypes:
+
+- `int`: An integer number (`4` bytes on `x86` processors)
+- `long`: Also an integer number (`4` bytes on `x86` processors)
+- `long long`: An integer number longer than a `long` (`8` bytes on `x86` processors)
+- `short`: An integer number shorter than an `int` (`2` bytes on `x86` processors)
+- `char`: A single-byte integer number. This is mostly used for storing character data, since `ASCII` strings usually are represented with one byte per character.
+- `float`: A floating-point number (`4` bytes on `x86` processors)
+- `double`: A floating-point number that is larger than a `float` (`8` bytes on `x86` processors)
+- `unsigned`: A modifier used for any of the above types which keeps them from being used as signed quantities
+- `*`: Used to denote that the data isn't an actual value, but
+a pointer to a location holding the given value (`4` bytes on an `x86` processor)
+- `struct`: A set of data items that have been put together under a name. You usually see pointers to structs passed as arguments. This is because passing structs to functions is fairly complicated, since they can take up so many storage locations
+- `typedef`: Allows you to rename a type (i.e. `typedef int myowntype`)
+
+#### Page 141
+
+Below there is a list of useful functions provided by `libc`.
+
+```c
+size_t strlen (const char *s)
+```
+
+Calculates the size of a null-terminated string.
+
+```c
+int strcmp (const char *s1, const char *s2)
+```
+
+Compares two strings alphabetically.
+
+```c
+char * strdup (const char *s)
+```
+
+Takes the pointer to a string, creates a new copy in a new location, and returns the new location.
+
+```c
+FILE * fopen (const char *filename, const char *opentype)
+```
+
+Opens a managed, buffered file (allows easier reading and writing than using file descriptors directly).
+
+```c
+int fclose (FILE *stream)
+```
+
+Closes a file opened with `fopen`.
+
+```c
+char * fgets (char *s, int count, FILE *stream)
+```
+
+Fetches a line of characters into string `s`.
+
+```c
+int fputs (const char *s, FILE *stream)
+```
+
+Writes a string to the given open file.
+
+```c
+int fprintf (FILE *stream, const char *template, ...)
+```
+
+Is just like `printf`, but it uses an open file rather than defaulting to using standard output.
+
+#### Page 142-143
+
+**Note**: In this section we are going to build a shared library. We'll be using the following programs: [write-record](./chapter8/write-record.s), [read-record](./chapter8/read-record.s), and [write-records](./chapter8/write-records.s).
+
+```bash
+as write-record.s -o write-record.o --32
+as read-record.s -o read-record.o --32
+ld -m elf_i386 -shared write-record.o read-record.o -o librecord.so
+```
+
+We start assembling our files as before, and then we passed the `-shared` option to the linker. This links both of these files together into a shared library called `librecord.so` (notice the `so` file extension).
+
+```bash
+as write-records.s -o write-records.o --32
+ld -L . -m elf_i386 -dynamic-linker /lib/ld-linux.so.2 -o write-records -lrecord write-records.o
+```
+
+Now for `write-records` to use our library we first tell the linker to include the current directory (that's what `-L .`) in the list of directories it looks for libraries (`/lib`, and `/usr/lib`). The option `-lrecord` tells the linker to search for functions in the file named `librecord.so`.
+
+```bash
+LD_LIBRARY_PATH=.
+export LD_LIBRARY_PATH
+```
+
+Finally we set the `LD_LIBRARY_PATH` environment variable to the current directory so the program can run, otherwise we should have to move our library to `/lib`, `/usr/lib`, or a directory listed in `/etc/ld.so.conf` since the dynamic linker only search on those locations. Running `./write-records` should work properly now (trying to do so before would result in an error).
