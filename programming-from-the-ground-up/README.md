@@ -948,3 +948,286 @@ export LD_LIBRARY_PATH
 ```
 
 Finally we set the `LD_LIBRARY_PATH` environment variable to the current directory so the program can run, otherwise we should have to move our library to `/lib`, `/usr/lib`, or a directory listed in `/etc/ld.so.conf` since the dynamic linker only search on those locations. Running `./write-records` should work properly now (trying to do so before would result in an error).
+
+## Chapter 9 - Intermediate Memory Topics
+
+#### Page 148-156
+
+When a program is loaded into memory, each `.section` is loaded into its own region of memory. All of the code and data declared in each section is brought together, even if they were separated in your source code.
+
+The actual instructions (the `.text` section) are loaded at the address `0x08048000`. The .data section is loaded immediately after that, followed by the `.bss` section.
+
+The last byte that can be addressed on Linux is location `0xbfffffff`. Linux starts the stack here and grows it downward toward the other sections. The initial layout of the stack is as follows: At the bottom of the stack, there is a word of memory that is zero. After that comes the null-terminated name of the program using ASCII characters. After the program name comes the program's environment variables. Then come the program's command-line arguments. These are the values that the user typed in on the command line to run this program. When we run `as`, for example, we give it several arguments — `as`, `sourcefile.s`, `-o`, and `objectfile.o`. After these, we have the number of arguments that were used. When the program begins, this is where the stack pointer (`%esp`) is pointing. Further pushes on the stack move `%esp` down in memory.
+
+For example the following instructions are equivalent:
+
+```assembly
+pushl %eax
+```
+
+```assembly
+movl %eax, (%esp)
+subl $4, %esp
+```
+
+As are the following ones:
+
+```assembly
+popl %eax
+```
+
+```assembly
+movl (%esp), %eax
+addl $4, %esp
+```
+A program's data region starts at the bottom of memory and goes up. The stack starts at the top of memory, and moves downward with each push. This middle part between the stack and your program's data sections is inaccessible memory — you are not allowed to access it until you tell the kernel that you need it. If you try, you will get an error (theusually `"segmentation fault"`). The same will happen if you try to access data before the beginning of your program, `0x08048000`. The last accessible memory address to your program is called the ***system break*** (also called the ***current break*** or just the ***break***).
+
+![Memory Layout of a Linux Program at Startup](./chapter9/screenshots/fig-1.png)
+
+Before loading your program, Linux finds an empty physical memory space large enough to fit your program, and then tells the processor to pretend that this memory is actually at the address `0x0804800` to load your program into. In other words a program can only access ***virtual memory***. The process of assigning virtual addresses to physical addresses is called ***mapping***.
+
+The reason there is inaccessible memory between the `.bss` and the stack is that this region of virtual memory addresses hasn't been mapped onto physical memory addresses. The *break* is the beginning of the area that contains unmapped memory. With the stack, however, Linux will automatically map in memory that is accessed from stack pushes.
+
+In order to make the process more efficient, memory is separated out into groups called ***pages***. A page is `4096` bytes of memory for Linux on x86 processors. All of the memory mappings are done a *page* at a time. Physical memory assignment, swapping, mapping, etc. are all done to memory pages instead of individual memory addresses.
+
+The way we tell Linux to move the *break point* is through the `brk` system call, which is number `45` and go in `%eax`. `%ebx` should be loaded with the requested breakpoint. Then you call int `$0x80` to signal Linux to do its work. After mapping in your memory, Linux will return the new break point in `%eax`. The new break point might actually be larger than what you asked for, because Linux rounds up to the nearest page. If there is not enough physical memory or swap to fulfill your request, Linux will return a `0` in `%eax`. Also, if you call `brk` with a `0` in `%ebx`, it will simply return the last usable memory address.
+
+A ***memory manager*** is a set of routines that takes care of getting your program memory for you. Most *memory managers* have two basic functions — `allocate` and `deallocate`. Whenever you need a certain amount of memory, you can simply tell `allocate` how much you need, and it will give you back an address to the memory. When you're done with it, you tell `deallocate` that you are through with it. `allocate` will then be able to reuse the memory. This pattern of memory management is called ***dynamic memory allocation***. This minimizes the number of "holes" in your memory, making sure that you are making the best use of it you can. The pool of memory used by memory managers is commonly referred to as the ***heap***.
+
+#### Page 157-173
+
+**Note**: In this section we explain the program [alloc](./chapter9/alloc.s).
+
+```assembly
+heap_begin:
+  .long 0
+current_break:
+  .long 0
+```
+
+We don't know where the beginning of the heap is, nor where the current break is. Therefore, we reserve space for their addresses, but just fill them with a `0` for the time being.
+
+```assembly
+.equ HEADER_SIZE, 8
+.equ HDR_AVAIL_OFFSET, 0
+.equ HDR_SIZE_OFFSET, 4
+```
+
+These constants define the structure of the heap. Before each region of memory allocated, we will have a record describing the memory. This record has a word reserved for the available flag and a word for the region's size. The actual memory allocated immediately follows this record. The available flag is used to mark whether this region is available for allocations, or if it is currently in use. The size field lets us know both whether or not this region is big enough for an allocation request, as well as the location of the next memory region.
+
+```assembly
+.equ UNAVAILABLE, 0
+.equ AVAILABLE, 1
+```
+
+We'll use the values `0` and `1` for unavailable and available respectively.
+
+```
+allocate_init:
+  pushl %ebp
+  movl  %esp, %ebp
+  movl  $SYS_BRK, %eax
+  movl  $0, %ebx
+  int   $LINUX_SYSCALL
+
+  incl  %eax
+  movl  %eax, current_break
+  movl  %eax, heap_begin
+  movl  %ebp, %esp
+  popl  %ebp
+  ret
+```
+
+Then we have the `allocate_init` function, which sets up the `heap_begin` and `current_break` variables. For that we make a `brk` system call (which returns the address of the current break), increment the value returned, and set `current_break` and `heap_begin`.
+
+The heap consists of the memory between `heap_begin` and `current_break`, so this says that we start off with a heap of zero bytes. Our `allocate` function will then extend the heap as much as it needs to when it is called.
+
+```assembly
+allocate:
+  pushl %ebp
+  movl  %esp, %ebp
+  movl  ST_MEM_SIZE(%ebp), %ecx
+  movl  heap_begin, %eax
+  movl  current_break, %ebx
+```
+
+This part initializes all of our registers. `movl ST_MEM_SIZE(%ebp), %ecx` pulls the size of the memory to allocate off of the stack. After that, it moves the beginning heap address and the end of the heap into registers.
+
+```assembly
+alloc_loop_begin:
+  cmpl  %ebx, %eax
+  je    move_break
+  movl  HDR_SIZE_OFFSET(%eax), %edx
+  cmpl  $UNAVAILABLE, HDR_AVAIL_OFFSET(%eax)
+  je    next_location
+  cmpl  %edx, %ecx
+  jle   allocate_here
+```
+
+First we check if we need more memory. `%eax` holds the current memory region being examined (`heap_begin` or `0` during the first iteration) and `%ebx` holds the location past the end of the heap (the break). Therefore if the next region to be examined is past the end of the heap, it means we need more memory to allocate a region of this size.
+
+```assembly
+move_break:
+  addl  $HEADER_SIZE, %ebx
+  addl  %ecx, %ebx
+  pushl %eax
+  pushl %ecx
+  pushl %ebx
+  movl  $SYS_BRK, %eax
+  int   $LINUX_SYSCALL
+
+  cmpl  $0, %eax 
+  je    error
+  popl  %ebx
+  popl  %ecx
+  popl  %eax
+  movl  $UNAVAILABLE, HDR_AVAIL_OFFSET(%eax)
+  movl  %ecx, HDR_SIZE_OFFSET(%eax)
+  addl  $HEADER_SIZE, %eax
+  movl  %ebx, current_break
+  movl  %ebp, %esp
+  popl  %ebp
+  ret
+```
+
+At this point, `%ebx` holds where we want the next region of memory to be. So, we add our header size (`addl $HEADER_SIZE, %ebx`) and region size (`addl %ecx, %ebx`) to `%ebx`, and that's where we want the system break to be. We then push all the registers we want to save on the stack, and call the `brk` system call.
+
+After that we check for errors (`cmpl $0, %eax` since `%eax` holds the return value of the Linux system call). In case of error we jump to the `error` label which exits the function. Otherwise we pop the registers back off the stack, mark the memory as unavailable (`movl $UNAVAILABLE, HDR_AVAIL_OFFSET(%eax)`), record the size of the memory (`movl %ecx, HDR_SIZE_OFFSET(%eax)`), and make sure `%eax` points to the start of usable memory (which is after the header).
+
+**Note:** wouldn't the `brk` system call return `0` **on success** and `-1` (or another negative number) on failure? If so, the `je error` after `cmpl $0, %eax` is wrong, it should be `jl error`, but according to the author it in fact return `0` on error, so we'll try and see.
+
+Then we store the new program break (`movl %ebx, current_break`) and return the pointer to the allocated memory.
+
+Now for the rest of the loop in `alloc_loop_begin`, assuming we do not jump to `move_break`.
+
+First we grab the size of the memory region and put it in `%edx` (`movl HDR_SIZE_OFFSET(%eax), %edx`). Then look at the available flag to see if it is set to `0` (`cmpl $UNAVAILABLE, HDR_AVAIL_OFFSET(%eax)`). If so, that means that memory region is in use, so we'll have to skip over it (`je next_location`).
+
+```assembly
+next_location:
+  addl  $HEADER_SIZE, %eax
+  addl  %edx, %eax
+  jmp   alloc_loop_begin
+```
+
+Otherwise, then we keep on going.
+
+If the space was available, we check to see if this space is big enough to hold the requested amount of memory (`cmpl %edx, %ecx`). If the requested size is less than or equal to the current region's size, we can use this block (`jle allocate_here`). It doesn't matter if the current region is larger than requested, because the extra space will just be unused.
+
+```assembly
+allocate_here:
+  movl $UNAVAILABLE, HDR_AVAIL_OFFSET(%eax)
+  addl $HEADER_SIZE, %eax
+  movl %ebp, %esp
+  popl %ebp
+  ret
+```
+
+`allocate_here` starts by marking the memory as being unavailable. Then it moves the pointer `%eax` past the header, and uses it as the return value for the function.
+
+We can now check the `deallocate` function.
+
+```assembly
+deallocate:
+  movl ST_MEMORY_SEG(%esp), %eax
+  subl $HEADER_SIZE, %eax
+  movl $AVAILABLE, HDR_AVAIL_OFFSET(%eax)
+  ret
+```
+
+All the `deallocate` function does is mark the current memory region as available so `allocate` can find it the next time is called. It's important to note that this function has no return value, so the value in `%eax` does not matter.
+
+#### Page 175-177
+
+**Note**: In this section we explain the program [read-records](./chapter9/read-records.s), which is a modified version of the program we wrote in chapter 6 that uses our memory allocator ([alloc](./chapter9/alloc.s)) instead of a buffer.
+
+```assembly
+.section .data
+  file_name:
+    .ascii "test.dat\0"
+  record_buffer_ptr:
+    .long 0
+```
+
+The first difference between this program and the one we wrote in chapter 6 is that we won't have a `.bss` section in this one. We'll create a label in the `.data` section that will hold a pointer to a section of memory. It will be called `record_buffer_ptr`.
+
+```assembly
+_start:
+  .equ ST_INPUT_DESCRIPTOR, -4
+  .equ ST_OUTPUT_DESCRIPTOR, -8
+
+  movl %esp, %ebp
+  subl $8, %esp
+
+  call  allocate_init
+  pushl $RECORD_SIZE
+  call  allocate
+  movl  %eax, record_buffer_ptr
+
+  movl $SYS_OPEN, %eax
+  movl $file_name, %ebx
+  movl $0, %ecx # This says to open read-only
+  movl $0666, %edx
+  int  $LINUX_SYSCALL
+
+  movl %eax, ST_INPUT_DESCRIPTOR(%ebp)
+
+  movl $STDOUT, ST_OUTPUT_DESCRIPTOR(%ebp)
+```
+
+Next we need to initialize our memory manager immediately after we start our program. Therefore, right after the stack is set up, we add `call allocate_init`.
+
+We continue by calling `allocate` with the size of our record (`RECORD_SIZE`) and moving its returned value to `%eax` (`movl %eax, record_buffer_ptr`).
+
+```assembly
+record_read_loop:
+  pushl ST_INPUT_DESCRIPTOR(%ebp)
+  pushl record_buffer_ptr
+  call  read_record
+  addl  $8, %esp
+
+  cmpl  $RECORD_SIZE, %eax
+  jne   finished_reading
+
+  movl  record_buffer_ptr, %eax
+  addl  $RECORD_FIRSTNAME, %eax
+  pushl %eax
+  call  count_chars
+  addl  $4, %esp
+  movl  %eax, %edx
+  movl  ST_OUTPUT_DESCRIPTOR(%ebp), %ebx
+  movl  $SYS_WRITE, %eax
+  movl  record_buffer_ptr, %ecx
+  addl  $RECORD_FIRSTNAME, %ecx
+  int   $LINUX_SYSCALL
+
+  pushl ST_OUTPUT_DESCRIPTOR(%ebp)
+  call  write_newline
+  addl  $4, %esp
+
+  jmp   record_read_loop
+```
+
+Now we have to replace `pushl $record_buffer` with `pushl record_buffer_ptr` in the `record_read_loop` function. The version of the program written in chapter 6 used *immediate addressing mode*, while the new version uses *direct addressing mode*, this is due to the fact that now we are working with a pointer.
+
+Next, to find the address of the `firstname` field of our record we are going to need to replace `pushl $RECORD_FIRSTNAME + record_buffer`. We calculate the address starting from `record_buffer_ptr` (`movl record_buffer_ptr, %eax`) and adding the `firstname` field offset (`addl $RECORD_FIRSTNAME, %eax`). The same needs to be done for `movl $RECORD_FIRSTNAME + record_buffer, %ecx`.
+
+```assembly
+finished_reading:
+  pushl record_buffer_ptr
+  call  deallocate
+  movl  $SYS_EXIT, %eax
+  movl  $0, %ebx
+  int   $LINUX_SYSCALL
+```
+
+Finally, we send `record_buffer_ptr` to the `deallocate` function right before exitting to deallocate the memory once we are done with it.
+
+```bash
+as read-records.s -o read-records.o --32
+as read-record.s -o read-record.o --32
+as write-newline.s -o write-newline.o --32
+as count-chars.s -o count-chars.o --32
+ld -m elf_i386 alloc.o read-record.o read-records.o write-newline.o count-chars.o -o read-records
+```
+
+The above commands are used for assembling and linking the program.
