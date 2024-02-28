@@ -734,9 +734,9 @@ Assembling and linking the program can be done using the commands above.
 
 #### Page 123-126
 
-**Note**: In this section we explain the program [add-year](./chapter7/add-year.s). This is a re-write of what we did in chapter 6, therefore there's a different file for it. The point of the program is exiting gracefully if it cannot open the inout file.
+**Note**: In this section we explain the program [add-year.s](./chapter7/add-year.s). This is a re-write of what we did in chapter 6, therefore there's a different file for it. The point of the program is exiting gracefully if it cannot open the inout file.
 
-The new version of [add-year](./chapter7/add-year.s) will depend on an external function declared in [error-exit](./chapter7/error-exit.s).
+The new version of [add-year.s](./chapter7/add-year.s) will depend on an external function declared in [error-exit.s](./chapter7/error-exit.s).
 
 ```assembly
 cmpl $0, %eax
@@ -765,7 +765,7 @@ The needed commands for assembling and linking.
 
 #### Page 130-133
 
-**Note**: In this section we explain the program [helloworld-lib](./chapter8/helloworld-lib.s), which access the C language library. An analogous program called [helloworld-nolib](./chapter8/helloworld-nolib.s) was written to demonstrate how to get the same results only using assembly directives.
+**Note**: In this section we explain the program [helloworld-lib.s](./chapter8/helloworld-lib.s), which access the C language library. An analogous program called [helloworld-nolib.s](./chapter8/helloworld-nolib.s) was written to demonstrate how to get the same results only using assembly directives.
 
 ```assembly
 .section .data
@@ -781,14 +781,14 @@ _start:
   call  exit
 ```
 
-This is our whole program. In comparisson to [helloworld-nolib](./chapter8/helloworld-nolib.s), this is much shorter. The lines to take note of here are `call  printf` and `call  exit`. Functions `printf` and `exit` are provided by the C library.
+This is our whole program. In comparisson to [helloworld-nolib.s](./chapter8/helloworld-nolib.s), this is much shorter. The lines to take note of here are `call  printf` and `call  exit`. Functions `printf` and `exit` are provided by the C library.
 
 ```bash
 as helloworld-lib.s -o helloworld-lib.o --32
 ld -dynamic-linker /lib/ld-linux.so.2 -m elf_i386 -o helloworld-lib helloworld-lib.o -lc
 ```
 
-The program [helloworld-lib](./chapter8/helloworld-lib.s) has be linked using a different method. The `-dynamic-linker` option for the `ld` command, allows our program to be linked to libraries. This builds the executable so that before executing, the operating system will load the program `/lib/ld-linux.so.2` to load in external libraries and link them with the program. This program is known as a dynamic linker.
+The program [helloworld-lib.s](./chapter8/helloworld-lib.s) has be linked using a different method. The `-dynamic-linker` option for the `ld` command, allows our program to be linked to libraries. This builds the executable so that before executing, the operating system will load the program `/lib/ld-linux.so.2` to load in external libraries and link them with the program. This program is known as a dynamic linker.
 
 The `-lc` option says to link to the C library (`libc.so`).
 
@@ -803,13 +803,13 @@ within the executable, but in external libraries.
 
 *Dynamically linking* our last program doesn't actually add any code to it, it just notes in the program where to look for the missing symbols.
 
-When the [helloworld-lib](./chapter8/helloworld-lib.s) program begins, the file `/lib/ld-linux.so.2` is loaded. This is the ***dynamic linker***. This looks at our program and sees that it needs the C library to run. So, it searches for a file called `libc.so` in the standard places (listed in `/etc/ld.so.conf` and in the contents of the `LD_LIBRARY_PATH` environment variable), then looks in it for all the needed symbols (`printf` and `exit` in this case), and then loads the library into the program's virtual memory. Finally, it replaces all instances of `printf` in the program with the actual location of `printf` in the library.
+When the [helloworld-lib.s](./chapter8/helloworld-lib.s) program begins, the file `/lib/ld-linux.so.2` is loaded. This is the ***dynamic linker***. This looks at our program and sees that it needs the C library to run. So, it searches for a file called `libc.so` in the standard places (listed in `/etc/ld.so.conf` and in the contents of the `LD_LIBRARY_PATH` environment variable), then looks in it for all the needed symbols (`printf` and `exit` in this case), and then loads the library into the program's virtual memory. Finally, it replaces all instances of `printf` in the program with the actual location of `printf` in the library.
 
 Running `ldd ./helloworld-lib` will return the libraries linked to the program, and their location in the operating system.
 
 #### Page 136-137
 
-**Note**: In this section we explain the program [printf-example](./chapter8/printf-example.s).
+**Note**: In this section we explain the program [printf-example.s](./chapter8/printf-example.s).
 
 ```assembly
 .section .data
@@ -925,7 +925,7 @@ Is just like `printf`, but it uses an open file rather than defaulting to using 
 
 #### Page 142-143
 
-**Note**: In this section we are going to build a shared library. We'll be using the following programs: [write-record](./chapter8/write-record.s), [read-record](./chapter8/read-record.s), and [write-records](./chapter8/write-records.s).
+**Note**: In this section we are going to build a shared library. We'll be using the following programs: [write-record.s](./chapter8/write-record.s), [read-record.s](./chapter8/read-record.s), and [write-records.s](./chapter8/write-records.s).
 
 ```bash
 as write-record.s -o write-record.o --32
@@ -996,7 +996,7 @@ A ***memory manager*** is a set of routines that takes care of getting your prog
 
 #### Page 157-173
 
-**Note**: In this section we explain the program [alloc](./chapter9/alloc.s).
+**Note**: In this section we explain the program [alloc.s](./chapter9/alloc.s).
 
 ```assembly
 heap_begin:
@@ -1138,7 +1138,7 @@ All the `deallocate` function does is mark the current memory region as availabl
 
 #### Page 175-177
 
-**Note**: In this section we explain the program [read-records](./chapter9/read-records.s), which is a modified version of the program we wrote in chapter 6 that uses our memory allocator ([alloc](./chapter9/alloc.s)) instead of a buffer.
+**Note**: In this section we explain the program [read-records.s](./chapter9/read-records.s), which is a modified version of the program we wrote in chapter 6 that uses our memory allocator ([alloc.s](./chapter9/alloc.s)) instead of a buffer.
 
 ```assembly
 .section .data
