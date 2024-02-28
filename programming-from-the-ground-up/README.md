@@ -1022,7 +1022,7 @@ These constants define the structure of the heap. Before each region of memory a
 
 We'll use the values `0` and `1` for unavailable and available respectively.
 
-```
+```assembly
 allocate_init:
   pushl %ebp
   movl  %esp, %ebp
