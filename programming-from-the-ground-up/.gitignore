@@ -2,5 +2,7 @@
 !/**/
 !*.*
 *.o
-./chapter6/test.dat
-./chapter6/testout.dat
+*.so
+chapter6/test.dat
+chapter6/testout.dat
+chapter8/test.dat
