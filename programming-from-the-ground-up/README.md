@@ -1448,3 +1448,11 @@ The usual commands for assembling and linking the program.
 ## Chapter 11 - High-Level Languages
 
 **Note**: I won't be convering this chapter since it is dedicated to high-level languages, which doesn't interest me at this precise moment. Why would I be reading an assembly book if I wanted to learn about high-level languages?
+
+## Chapter 12 - Optimization
+
+#### Page 225-228
+
+###### Local Optimizations
+
+The fastest addressing modes are *immediate* and *register*. *Direct* is the next fastest, then *indirect*, and *base pointer* and *indexed indirect* are the slowest. Use the faster addressing modes, when possible. When you have a structured piece of memory that you are accessing using *base pointer* addressing, the first element can be accessed the quickest. Since it's offset is `0`, you can access it using *indirect addressing* instead of *base pointer addressing*, which makes it faster.
