@@ -1444,3 +1444,7 @@ ld -m elf_i386 integer-to-number.o count-chars.o write-newline.o conversion-prog
 ```
 
 The usual commands for assembling and linking the program.
+
+## Chapter 11 - High-Level Languages
+
+**Note**: I won't be convering this chapter since it is dedicated to high-level languages, which doesn't interest me at this precise moment. Why would I be reading an assembly book if I wanted to learn about high-level languages?
