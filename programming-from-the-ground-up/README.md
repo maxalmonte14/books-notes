@@ -1231,3 +1231,216 @@ ld -m elf_i386 alloc.o read-record.o read-records.o write-newline.o count-chars.
 ```
 
 The above commands are used for assembling and linking the program.
+
+## Chapter 10 - Counting Like a Computer
+
+#### Page 182-183
+
+Computers count using ***base two***, also known as ***binary*** instead of ***base ten*** or ***decimal*** as we humans do. That means numbers are represented with only two possible digits (`0` or `1`), instead of `0` through `9` (like we do in decimal). In *base two*, moving the decimal one digit to the right multiplies by two, and moving it to the left divides by two.
+
+##### Table of binary addition
+
+| + | 0 | 1  |
+| - | - | -- |
+| 0 | 0 | 1  |
+| 1 | 1 | 10 |
+
+**Note**: there's an error in the book, the author says that `0 + 1 = 0` when in reality `0 + 1 = 1`! Reference [here](https://study.com/academy/lesson/how-to-add-binary-numbers.html).
+
+##### Table of binary multiplication
+
+| + | 0 | 1 |
+| - | - | - |
+| 0 | 0 | 0 |
+| 1 | 0 | 1 |
+
+With this in mine we can add two binary numbers (in this case `149` and `101`):
+
+```
+  10010101
++  1100101
+----------
+  11111010
+```
+
+Or multiply them:
+
+```
+      10010101
+    *  1100101
+    ----------
+      10010101
+     00000000
+    10010101
+   00000000
+  00000000
+ 10010101
+10010101
+--------------
+11101011001001
+```
+
+#### Page 184-186
+
+###### Conversions Between Binary and Decimal
+
+We just need to add up what each digit represents, and we will have a decimal number. Take the binary number `10010101`. To find out what it is in decimal, we take it apart like this:
+
+```
+1 0 0 1 0 1 0 1
+| | | | | | | |
+| | | | | | | Individual units (2^0)
+| | | | | | 0 groups of 2 (2^1)
+| | | | | 1 group of 4 (2^2)
+| | | | 0 groups of 8 (2^3)
+| | | 1 group of 16 (2^4)
+| | 0 groups of 32 (2^5)
+| 0 goups of 64 (2^6)
+1 group of 128 (2^7)
+```
+
+Then we add all of the pieces together like this:
+
+```
+128 + 16 + 4 + 1 = 149
+```
+
+So `10010101` in binary is `149` in decimal.
+
+Now to convert from *decimal* to *binary* we take a number, let's say `17`, and divide it by two, you get `8` with `1` left over. So that means there are `8` groups of two, and `1` ungrouped. Therefore the rightmost digit will be `1`. We have the rigtmost digit figured out, and `8` groups of two left over. Now divide `8` by `2`. We get `4`, with nothing left over. The next digit to the left is `0`. We divide `4` by `2` and get `2`, with `0` left over, so the next digit is `0`. Then, we divide `2` by `2` and get `1`, with `0` left over. So the next digit is `0`. Finally, we divide `1` by `2` and get `0` with `1` left over, so the next digit to the left is `1`. There's nothing left, so we're done. The number we wound up with is `10001`.
+
+Here's step by step representation of the process:
+
+```
+17 / 2 = 8 with 1 leftover. Current binary number = 1
+8 / 2 = 4, no leftover. Current binary number = 01
+4 / 2 = 2, no leftover. Current binary number = 001
+2 / 2 = 1, no leftover. Current binary number = 0001
+1 / 2 = 0 with 1 leftover. Final binary number = 10001
+```
+
+**Note**: The largest number that you can hold in `16` bits is `65535`, in `32` bits is `4294967295` (4 billion), and in `64` bits is `18,446,744,073,709,551,615`. For x86 processors, most of the time you will deal with `4`-byte numbers (`32` bits), because that's the size of the registers.
+
+#### Page 187-194
+
+###### Truth, Falsehood, and Binary Numbers
+
+There are multiple ***binary operators*** (also called ***logical operators***) that allow you to do operations (other than arithmetic ones) with binary numbers:
+
+- `AND`: takes two bits and returns one bit. It will return a `1` only if both bits are `1`, and a `0` otherwise. For example, `1 AND 1` is `1`, but `1 AND 0` is `0`
+- `OR`: takes two bits and returns one bit. It will return `1` if either of the original bits is `1`. For example, `1 OR 0` is `1`, but `0 OR 0` is `0`
+- `NOT`: only takes one bit, and returns it's opposite `NOT 1` is `0` and `NOT 0` is `1`
+- `XOR`: is like `OR`, except it returns `0` if both bits are `1`
+
+Computers can do these operations on whole registers at a time. For example, if a register has `10100010101010010101101100101010` and another one has `10001000010101010101010101111010`, you can run any of these operations on the whole registers. If we were to `AND` them, the computer will run from the first bit to the 32nd and run the `AND` operation on that bit in both registers. In this case:
+
+```
+10100010101010010101101100101010 AND
+10001000010101010101010101111010
+--------------------------------
+10000000000000010101000100101010
+```
+
+The previous are ***boolean operators***. In addition to them there are two *binary operators* that aren't boolean, shift and rotate.
+
+A left shift moves each digit of a binary number one space to the left, puts a zero in the one's spot, and chops off the furthest digit to the left. A left rotate does the same thing, but takes the furthest digit to the left and puts it in the one's spot. For example:
+
+```
+Shift left 10010111 = 00101110
+Rotate left 10010111 = 00101111
+```
+
+*Shifting* is used in combination with ***masking*** to look at the value of an individual. *Masking* is the process of eliminating everything you don't want. For example, if we have a register with the value `00000000000000000000000000001011` and want to access the second bit, we can shift the number so that value is in the one's place, and then mask that digit so that it is all we see. Masking is accomplished by doing an `AND` with a number that has the bits we are interested in set to `1.` So assuming that we shift our example value to the right, and mask it like so:
+
+```
+00000000000000000000000000000101 AND
+00000000000000000000000000000001
+-----------------------------------
+00000000000000000000000000000001
+```
+
+After doing this we'll get `0` if the second bit was off, or `1` if it was on (that's our case).
+
+In code it would look like this:
+
+```assembly
+# Note - assume that the register %ebx holds
+#        value we are going to work with
+
+movl %ebx, %eax # This copies the information into %eax so
+                # we don't lose the original data
+
+shrl $1, %eax   # This is the shift operator. It stands
+                # for Shift Right Long. This first number
+                # is the number of positions to shift,
+                # and the second is the register to shift
+
+# This does the masking
+andl $0b00000000000000000000000000000001, %eax
+
+# Check to see if the result is 1 or 0
+andl $0b00000000000000000000000000000001, %eax
+
+je   value_is_one
+
+jmp  value_is_zero
+```
+
+**Note**: this last piece of code does not represent a complete program, so it would probably not compile or run.
+
+Notice that the `0b` notation in `andl $0b00000001, %eax` means that what follows is a binary number.
+
+#### Page 199-200
+
+###### Octal and Hexadecimal Numbers
+
+***Octal*** is a representation that only uses the numbers `0` through `7`. So the octal number `10` is actually `8` in decimal because it is one group of eight. Octal `121` is decimal `81` (one group of `64` (8^2), two groups of `8`, and one left over). Every `3` binary digits make one octal digit. So `0` is `000`, `1` is `001`, `2` is `010`, `3` is `011`, 4 is `100`, 5 is `101`, 6 is `110`, and 7 is `111`.
+
+Assembler knows a number is octal is because octal numbers are prefixed with a zero. For example `010` means `10` in octal, which is `8` in decimal. If you just write `10` that means `10` in decimal.
+
+***Hexadecimal*** numbers (also called "hex") use the numbers `1`-`15` for each digit. however, since `10`-`15` don't have their own numbers, hexadecimal uses the letters `a` through `f` to represent them. The letter `a` represents `10`, the letter `b` represents `11`, and so on. `10` in hexadecimal is `16` in decimal. In octal, each digit represented three bits. In hexadecimal, each digit represents **four bits**. Every two digits is a full byte, and eight digits is a 32-bit word. It is easier to write hexadecimal numbers than it is to write binary numbers, because it's only a quarter as many digits.
+
+Hexadecimal numbers are prefixed with `0x`.
+
+#### Page 201-204
+
+###### Order of Bytes in a Word
+
+When bytes are written from registers to memory, their bytes are written out least-significant-portion-first. People expect that if they have a word in a register, say `0x5d 23 ef ee`, the bytes will be written to memory in that order. However, **on x86 processors**, the bytes are actually written in reverse order. In memory the bytes would be `0xee ef 23 5d`. The bytes are written in reverse order from what they would appear conceptually, but the bits within the bytes are ordered normally.
+
+The x86 processor is a ***little-endian*** processor, which means that it stores the "little end", or least-significant byte of its words first.
+
+![Register-to-memory transfers on little-endian systems](./chapter10/screenshots/fig-1.png)
+
+The byte-switching magic happens automatically behind the scenes during register-to-memory transfers. However, the byte order can cause problems in several instances:
+
+- If you try to read in several bytes at a time using `movl` but deal with them on a byte-by-byte basis using the least significant byte (i.e. - by using `%al` and/or shifting of the register), this will be in a different order than they appear in memory.
+- If you read or write files written for different architectures, you may have to account for whatever order they write their bytes in.
+- If you read or write to network sockets, you may have to account for a different
+byte order in the protocol.
+
+#### Page 204-210
+
+###### Converting Numbers for Display
+
+**Note**: In this section is for the program [conversion-program.s](./chapter10/conversion-program.s), which depends on the function [integer-to-string.s](./chapter10/integer-to-string.s) (and others we wrote previously).
+
+Since the code is so well documented the program will not be explained here, however the following line left an impression on me:
+
+```assembly
+addl $'0', %edx
+```
+
+*"Why are we adding single quotes to `0`?"* — was my first thought. The reason is simple, by doing that we access the ASCII code for number `0` (because we are converting `0` to a string character, and string characters are saved as their equivalent ASCII code in memory), and by increasing the value of the ASCII code for `0` by any single digit we get the ASCII code for that digit. [Yeah science!](https://www.youtube.com/watch?v=saYqNH0OjbY&t=29s).
+
+The ASCII code for `0` is `48` (in decimal). `48 + 1 = 49`, the ASCII code for `1`, `48 + 2 = 50`, the ASCII code for `2`... That continues until `48 + 9 = 57`, the ASCII code for `9`.
+
+```bash
+as integer-to-string.s -o integer-to-number.o --32
+as count-chars.s -o count-chars.o --32
+as write-newline.s -o write-newline.o --32
+as conversion-program.s -o conversion-program.o --32
+ld -m elf_i386 integer-to-number.o count-chars.o write-newline.o conversion-program.o -o conversion-program
+```
+
+The usual commands for assembling and linking the program.
