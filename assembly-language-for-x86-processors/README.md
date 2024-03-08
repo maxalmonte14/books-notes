@@ -80,10 +80,10 @@ The basic storage unit for all data in an x86 computer is a byte, containing 8 b
 Suppose we number the digits in a four-digit hexadecimal integer with subscripts as $D_3D_2D_1D_0$. The following formula calculates the integer's decimal value:
 
 $$
-dec = (D_3 * 16^3) + (D_2 * 16^2) + (D_1 * 16^1) + (D_0 * 16^0)
+dec = (D_3 \times 16^3) + (D_2 \times 16^2) + (D_1 \times 16^1) + (D_0 \times 16^0)
 $$
 
-For example, hexadecimal `3BA4` is equal to $(3 * 16^3) + (11 * 16^2) + (10 * 16^1) + (4 * 16^0)$, or decimal `15,268`.
+For example, hexadecimal `3BA4` is equal to $(3 \times 16^3) + (11 \times 16^2) + (10 \times 16^1) + (4 \times 16^0)$, or decimal `15,268`.
 
 ![How to convert the hexadecimal number 3BA4 to decimal](./chapter1/screenshots/fig1-4.png)
 
@@ -516,12 +516,12 @@ In 64-bit mode, addresses can theoretically be as large as 64-bits, although pro
 
 In 64-bit mode, the default operand size is `32` bits and there are eight general-purpose registers. By adding the `REX` (register extension) prefix to each instruction, however, the operands can be `64` bits long and a total of `16` general-purpose registers become available. You have all the same registers as in 32-bit mode, plus eight numbered registers, `R8` through `R15`.
 
-| Operand Size | Available Registers                                                                  |
-| ------------ | ------------------------------------------------------------------------------------ |
-| 8 bits       | AL, BL, CL, DL, DIL, SIL, BPL, SPL, R8L, R9L, R10L, R11L, R12L, R13L, R14L, R15L     |
-| 16 bits      | AX, BX, CX, DX, DI, SI, BP, SP, R8W, R9W, R10W, R11W, R12W, R13W, R14W, R15W         |
-| 32 bits      | EAX, EBX, ECX, EDX, EDI, ESI, EBP, ESP, R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D |
-| 64 bits      | RAX, RBX, RCX, RDX, RDI, RSI, RBP, RSP, R8, R9, R10, R11, R12, R13, R14, R15         |
+| Operand Size | Available Registers                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 8 bits       | `AL`, `BL`, `CL`, `DL`, `DIL`, `SIL`, `BPL`, `SPL`, `R8L`, `R9L`, `R10L`, `R11L`, `R12L`, `R13L`, `R14L`, `R15L`     |
+| 16 bits      | `AX`, `BX`, `CX`, `DX`, `DI`, `SI`, `BP`, `SP`, `R8W`, `R9W`, `R10W`, `R11W`, `R12W`, `R13W`, `R14W`, `R15W`         |
+| 32 bits      | `EAX`, `EBX`, `ECX`, `EDX`, `EDI`, `ESI`, `EBP`, `ESP`, `R8D`, `R9D`, `R10D`, `R11D`, `R12D`, `R13D`, `R14D`, `R15D` |
+| 64 bits      | `RAX`, `RBX`, `RCX`, `RDX`, `RDI`, `RSI`, `RBP`, `RSP`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`         |
 
 - In 64-bit mode, a single instruction cannot access both a high-byte register, such as `AH`, `BH`, `CH`, and `DH`, and at the same time, the low byte of one of the new byte registers (such as `DIL`).
 - The 32-bit `EFLAGS` register is replaced by a 64-bit `RFLAGS` register in 64-bit mode. The two registers share the same lower `32` bits, and the upper `32` bits of `RFLAGS` are not used.
@@ -1440,7 +1440,7 @@ The assembler lets you switch back and forth between code and data in your progr
 
 ```assembly
 .code
-  move eax, ebx
+  mov eax, ebx
 .data
   temp DWORD ?
 .code
@@ -1705,7 +1705,7 @@ Here's how this program differs from the 32-bit version:
 - Lines 14–15 in our new program use two instructions to end the program (`mov` and `call`). The 32-bit version used an `INVOKE` statement to do the same thing. The 64-bit version of MASM does not support the `INVOKE` directive.
 - In line 17 of the 64-bit program, the END directive does not specify a program entry point. The 32-bit version of the program did.
 
-#### Page 283-
+#### Page 283
 
 ###### Using 64-Bit Registers
 
@@ -1724,4 +1724,1291 @@ sum QWORD 0
     mov rax, 5
     add rax, 6
     mov sum, rax
+```
+
+## Chapter 4 - Data Transfers, Addressing, and Arithmetic
+
+#### Page 301-308
+
+###### Data Transfer Instructions
+
+A ***data transfer instruction*** copies data from a source operand to a destination operand. Assemblers let you do just about anything you want, as long as the processor's instruction set can do what you ask. In other words, assembly language forces you to pay attention to data storage and machine-specific details. x86 processors have what is commonly known as a *complex instruction set*, so they offer a lot of ways of doing things.
+
+###### Operand Types
+
+There are three basic types of operands:
+
+- Immediate operand—uses a numeric or character literal expression
+- Register operand—uses a named CPU register
+- Memory operand—references a memory location
+
+| Operand  | Description                                                                             |
+| -------  | --------------------------------------------------------------------------------------- |
+| reg8     | 8-bit general-purpose register: `AH`, `AL`, `BH`, `BL`, `CH`, `CL`, `DH`, `DL`          |
+| reg16    | 16-bit general-purpose register: `AX`, `BX`, `CX`, `DX`, `SI`, `DI`, `SP`, `BP`         |
+| reg32    | 32-bit general-purpose register: `EAX`, `EBX`, `ECX`, `EDX`, `ESI`, `EDI`, `ESP`, `EBP` |
+| reg      | Any general-purpose register                                                            |
+| sreg     | 16-bit segment register: `CS`, `DS`, `SS`, `ES`, `FS`, `GS`                             |
+| imm      | 8-, 16-, or 32-bit immediate value                                                      |
+| imm8     | 8-bit immediate byte value                                                              |
+| imm16    | 16-bit immediate word value                                                             |
+| imm32    | 32-bit immediate doubleword value                                                       |
+| reg/mem8 | 8-bit operand, which can be an 8-bit general register or memory byte                    |
+| reg/mem16 | 16-bit operand, which can be an 16-bit general register or memory word                 |
+| reg/mem32 | 32-bit operand, which can be an 32-bit general register or memory doubleword           |
+| mem       | An 8-, 16-, or 32-bit memory operand                                                   |
+
+###### Direct Memory Operands
+
+A ***direct memory operand*** is an operand identifier that refers to a specific offset within the data segment. For example, the following declaration for a variable named `var1` says that its size attribute is byte and it contains the value `10` hexadecimal:
+
+```assembly
+.data
+  var1 BYTE 10h
+```
+
+We can write instructions that dereference (look up) *memory operands* using their addresses. Suppose `var1` is located at offset `10400h`. The following instruction copies its value into the `AL` register:
+
+```assembly
+mov al var1
+```
+
+It is assembled into the machine instruction `A0 00010400`.
+
+**Alternative Notation**. Some programmers prefer to use the following notation with direct operands because the brackets imply a dereference operation:
+
+```assembly
+mov al, [var1]
+```
+
+###### MOV Instruction
+
+The `MOV` instruction copies data from a source operand to a destination operand. Its basic format shows that the first operand is the destination and the second operand is the source:
+
+```assembly
+MOV destination,source
+```
+
+`MOV` is very flexible in its use of operands, as long as the following rules are observed:
+
+- Both operands must be the same size.
+- Both operands cannot be memory operands.
+- The instruction pointer register (`IP`, `EIP`, or `RIP`) cannot be a destination operand.
+
+```assembly
+MOV reg, reg
+MOV mem, reg
+MOV reg, mem
+MOV mem, imm
+MOV reg, imm
+```
+
+###### Memory to Memory
+
+A single `MOV` instruction cannot be used to move data directly from one memory location to another. Instead, you must move the source operand's value to a register before assigning its value to a memory operand:
+
+```assembly
+.data
+  var1 WORD ?
+  var2 WORD ?
+.code
+  mov ax, var1
+  mov var2, ax
+```
+
+###### Overlapping Values
+
+The following code example shows how the same 32-bit register can be modified using differently sized data. When `oneWord` is moved to `AX`, it overwrites the existing value of `AL`. When `oneDword` is moved to `EAX`, it overwrites `AX`. Finally, when `0` is moved to `AX`, it overwrites the lower half of `EAX`.
+
+```assembly
+.data
+  oneByte  BYTE 78h
+  oneWord  WORD 1234h
+  oneDword DWORD 12345678h
+.code
+  mov eax, 0          ; EAX = 00000000h
+  mov al, oneByte     ; EAX = 00000078h
+  mov ax, oneWord     ; EAX = 00001234h
+  mov eax, oneDword   ; EAX = 12345678h
+  mov ax, 0           ; EAX = 12340000h
+```
+
+#### Page 309-313
+
+###### Copying Smaller Values to Larger Ones
+
+Although `MOV` cannot directly copy data from a smaller operand to a larger one, there are workarounds. Suppose `count` (unsigned, 16 bits) must be moved to `ECX` (32 bits). We can set `ECX` to zero and move count to `CX`:
+
+```assembly
+.data
+  count DWORD 1
+
+.code
+  mov ecx, 0
+  mov cx, count
+```
+
+If we try the same approach with a signed integer equal to `-16` data is lost:
+
+```assembly
+.data
+  signedVal SWORD -16   ; FFF0h (-16)
+
+.code
+  mov ecx, 0
+  mov cx, signedVal     ; ECX = 0000FFF0h (+65,520)
+```
+
+The value in `ECX` (`+65,520`) is completely different from `-16`. On the other hand, if we had filled `ECX` first with `FFFFFFFFh` and then copied signedVal to `CX`, the final value would have been correct:
+
+```assembly
+mov ecx, 0FFFFFFFFh
+mov cx, signedVal     ; ECX = FFFFFFF0h (-16)
+```
+
+The effective result of this example was to use the highest bit of the source operand (`1`) to fill the upper 16 bits of the destination operand, `ECX`. This technique is called ***sign extension***. Of course, we cannot always assume that the highest bit of the source is a `1`. The `MOVZX` and `MOVSX` instructions deal with both unsigned and signed integers.
+
+###### MOVZX Instruction
+
+The `MOVZX` instruction (move *with zero-extend*) copies the contents of a source operand into a destination operand and zero-extends the value to 16 or 32 bits. This instruction is only used with unsigned integers. There are three variants:
+
+```assembly
+MOVZX reg32, reg/mem8
+MOVZX reg32, reg/mem16
+MOVZX reg16, reg/mem8
+```
+
+In each of the three variants, the first operand (a register) is the destination and the second is the source. Notice that the source operand cannot be a constant. The following example zero-extends binary `10001111` into `AX`:
+
+```assembly
+.data
+  byteVal BYTE 10001111b
+.code
+  movzx ax, byteVal       ; AX = 0000000010001111b
+```
+
+![Using MOVZX to copy a byte into a 16-bit destination.](./chapter4/screenshots/fig4-1.png)
+
+The following examples use registers for all operands, showing all the size variations:
+
+```assembly
+mov bx, 0A69Bh
+movzx eax, bx   ; EAX = 0000A69Bh
+movzx edx, bl   ; EDX = 0000009Bh
+movzx cx, bl    ; CX = 009Bh
+```
+
+The following examples use memory operands for the source and produce the same results:
+
+```assembly
+.data
+  byte1 BYTE 9Bh
+  word1 WORD 0A69Bh
+.code
+  movzx eax, word1   ; EAX = 0000A69Bh
+  movzx edx, byte1   ; EDX = 0000009Bh
+  movzx cx, byte1    ; CX = 009Bh
+```
+
+###### MOVSX Instruction
+
+The `MOVSX` instruction (move with sign-extend) copies the contents of a source operand into a destination operand and sign-extends the value to 16 or 32 bits. This instruction is only used with signed integers. There are three variants:
+
+```assembly
+MOVSX reg32, reg/mem8
+MOVSX reg32, reg/mem16
+MOVSX reg16, reg/mem8
+```
+
+An operand is sign-extended by taking the smaller operand's highest bit and repeating (replicating) the bit throughout the extended bits in the destination operand. The following example sign-extends binary `10001111b` into `AX`:
+
+```assembly
+.data
+  byteVal BYTE 10001111b
+.code
+  movsx ax, byteVal       ; AX = 1111111110001111b
+```
+
+The lowest 8 bits are copied . The highest bit of the source is copied into each of the upper 8 bit positions of the destination.
+
+![Using MOVSX to copy a byte into a 16-bit destination.](./chapter4/screenshots/fig4-2.png)
+
+A hexadecimal constant has its highest bit set if its most significant hexadecimal digit is greater than `7`. In the following example, the hexadecimal value moved to `BX` is `A69B`, so the leading "A" digit tells us that the highest bit is set. (The leading zero appearing before `A69B` is just a notational convenience so the assembler does not mistake the constant for the name of an identifier.)
+
+```assembly
+mov   bx, 0A69Bh
+movsx eax, bx     ; EAX = FFFFA69Bh
+movsx edx, bl     ; EDX = FFFFFF9Bh
+movsx cx, bl      ; CX  = FF9Bh
+```
+
+#### Page 314
+
+###### LAHF and SAHF Instructions
+
+The `LAHF` (load status flags into `AH`) instruction copies the low byte of the `EFLAGS` register into `AH`. The following flags are copied: Sign, Zero, Auxiliary Carry, Parity, and Carry. Using this instruction, you can easily save a copy of the flags in a variable for safekeeping:
+
+```assembly
+.data
+  saveflags BYTE ?
+.code
+  lahf                ; load flags into AH
+  mov saveflags, ah   ; save them in a variable
+```
+
+The `SAHF` (store `AH` into status flags) instruction copies `AH` into the low byte of the `EFLAGS` (or `RFLAGS`) register. For example, you can retrieve the values of flags saved earlier in a variable:
+
+```assembly
+mov ah, saveflags   ; load saved flags into AH
+sahf                ; copy into Flags register
+```
+
+#### Page 314-315
+
+###### XCHG Instruction
+
+The `XCHG` (exchange data) instruction exchanges the contents of two operands. There are three variants:
+
+```assembly
+XCHG reg, reg
+XCHG reg, mem
+XCHG mem, reg
+```
+
+The rules for operands in the `XCHG` instruction are the same as those for the `MOV` instruction, except that `XCHG` does not accept *immediate operands*. In array sorting applications, `XCHG` provides a simple way to exchange two array elements. Here are a few examples:
+
+```assembly
+xchg ax, bx     ; exchange 16-bit regs
+xchg ah, al     ; exchange 8-bit regs
+xchg var1, bx   ; exchange 16-bit mem op wit BX
+xchg eax, ebx   ; exchange 32-bit regs
+```
+
+To exchange two memory operands, use a register as a temporary container and combine `MOV` with `XCHG`:
+
+```assembly
+mov  ax, val1
+xchg ax, val2
+mov  val1, ax
+```
+
+#### Page 315-318
+
+###### Direct-Offset Operands
+
+You can add a displacement to the name of a variable, creating a ***direct-offset operand***. This lets you access memory locations that may not have explicit labels. Let's begin with an array of bytes named `arrayB`:
+
+```assembly
+arrayB BYTE 10h, 20h, 30h, 40h, 50h
+```
+
+If we use `MOV` with `arrayB` as the source operand, we automatically move the first byte in the array:
+
+```assembly
+mov al, arrayB   ; AL = 10h
+```
+
+We can access the second byte in the array by adding `1` to the offset of `arrayB`:
+
+```assembly
+mov al, [arrayB+1]   ; AL = 20h
+```
+
+An expression such as `arrayB + 1` produces what is called an ***effective address*** by adding an integer constant to the name of a data label. Surrounding an effective address with brackets makes it clear that the expression is dereferenced to obtain the contents of memory at the address. The assembler does not require you to surround address expressions with brackets, but we highly recommend their use for clarity.
+
+MASM has no built-in range checking for effective addresses. In the following example, assuming `arrayB` holds five bytes, the instruction retrieves a byte of memory outside the array. The result is a sneaky logic bug, so be extra careful when checking array references:
+
+```assembly
+mov al, [arrayB+20]   ; AL = ?
+```
+
+###### Word and Doubleword Arrays
+
+In an array of 16-bit words, the offset of each array element is 2 bytes beyond the previous one. That is why we add `2` to `ArrayW` in the next example to reach the second element, shown in this code:
+
+
+```assembly
+.data
+  arrayW WORD 100h, 200h, 300h
+
+.code
+  mov ax, arrayW       ; AX = 100h
+  mov ax, [arrayW+2]   ; AX = 200h
+```
+
+Similarly, the second element in a doubleword array is 4 bytes beyond the first one shown in the following code:
+
+```assembly
+.data
+  arrayD DWORD 10000h, 20000h
+
+.code
+  mov eax, arrayD       ; AX = 10000h
+  mov eax, [arrayD+4]   ; AX = 20000h
+```
+
+#### Page 330-336
+
+###### Addition and Subtraction
+
+###### INC and DEC Instructions
+
+The `INC` and `DEC` instructions, respectively, add `1` and subtract `1` from a register or memory operand. The syntax is:
+
+```assembly
+INC reg/mem
+DEC reg/mem
+```
+
+For example:
+
+```assembly
+.data
+  myWord WORD 1000h
+
+.code
+  inc myWord      ; myWord = 1001h
+  mov bx, myWord
+  dec bx          ; BX = 1000h
+```
+
+The Overflow, Sign, Zero, Auxiliary Carry, and Parity flags are changed according to the value of the destination operand. The `INC` and `DEC` instructions do not affect the Carry flag.
+
+###### ADD Instruction
+
+The ADD instruction adds a source operand to a destination operand. The syntax is:
+
+```assembly
+ADD dest, source
+```
+
+The source operand's value is unchanged by the operation, and the sum is stored in the destination operand. The operand types are the same for `ADD` as for `MOV`.
+
+```assembly
+.data
+  var1 DWORD 10000h
+  var2 DWORD 20000h
+
+.code
+  mov eax, var1   ; EAX = 10000h
+  add eax, var2   ; EAX = 30000h
+```
+
+The Carry, Zero, Sign, Overflow, Auxiliary Carry, and Parity flags are changed according to the value that is placed in the destination operand.
+
+###### SUB Instruction
+
+The `SUB` instruction subtracts a source operand from a destination operand. The set of possible operands is the same as for the `ADD` instruction. The syntax is:
+
+```assembly
+.data
+  var1 DWORD 30000h
+  var2 DWORD 10000h
+
+.code
+  mov eax, var1   ; EAX = 30000h
+  sub eax, var2   ; EAX = 20000h
+```
+
+###### NEG Instruction
+
+The `NEG` instruction reverses the sign of a number by converting the number to its two's complement. The following operands are permitted:
+
+```assembly
+NEG reg
+NEG mem
+```
+
+###### Implementing Arithmetic Expressions
+
+By combining `MOV`, `ADD`, `SUB`, and `NEG` we can express complex operations such as `Rval = -Xval + (Yval - Zval);` in assembly:
+
+```assembly
+.data
+  Rval SDWORD ?
+  Xval SDWORD 26
+  Yval SDWORD 30
+  Zval SDWORD 40
+
+.code
+  mov eax, Xval
+  neg eax                       ; EAX = -26
+  ; second term: (Yval - Zval)
+  mov ebx, Yval
+  sub ebx, Zval                 ; EBX = -10
+  ; add the terms and store:
+  add eax, ebx
+  mov Rval, eax                 ; -36
+```
+
+#### Page 336-344
+
+###### Flags Affected by Addition and Subtraction
+
+###### Unsigned Operations: Zero, Carry, and Auxiliary Carry
+
+The Zero flag is set when the result of an arithmetic operation equals zero. The following examples show the state of the destination register and Zero flag after executing the `SUB`, `INC`, and `DEC` instructions:
+
+```assembly
+mov ecx, 1
+sub ecx, 1            ; ECX = 0, ZF = 1
+mov eax, 0FFFFFFFFh
+inc eax               ; EAX = 0, ZF = 1
+inc eax               ; EAX = 1, ZF = 0
+dec eax               ; EAX = 0, ZF = 1
+```
+
+###### Addition and the Carry Flag
+
+When adding two unsigned integers, the Carry flag is a copy of the carry out of the most significant bit of the destination operand. Intuitively, we can say `CF = 1` when the sum exceeds the storage size of its destination operand. In the next example, `ADD` sets the Carry flag because the sum (`100h`) is too large for `AL`:
+
+```assembly
+mov al, 0FFh
+add al, 1     ; AL = 00, CF = 1
+```
+
+![Adding 1 to 0FFh sets the Carry flag.](./chapter4/screenshots/fig4-3.png)
+
+On the other hand, if `1` is added to `00FFh` in `AX`, the sum easily fits into 16 bits and the Carry flag is clear:
+
+```assembly
+mov ax, 0FFh
+add ax, 1     ; AX = 0100h, CF = 0
+```
+
+But adding `1` to `FFFFh` in the `AX` register generates a Carry out of the high bit position of `AX`:
+
+```assembly
+mov ax, 0FFFFh
+add ax, 1     ; AX = 0000, CF = 1
+```
+
+###### Subtraction and the Carry Flag
+
+A subtract operation sets the Carry flag when a larger unsigned integer is subtracted from a smaller one.
+
+```assembly
+mov al, 1
+sub al, 2     ; AX = FFh, CF = 1
+```
+
+![Subtracting 2 from 1 sets the Carry flag.](./chapter4/screenshots/fig4-4.png)
+
+**Note**: The `INC` and `DEC` instructions do not affect the Carry flag. Applying the `NEG` instruction to a nonzero operand always sets the Carry flag.
+
+###### Auxiliary Carry
+
+The Auxiliary Carry (`AC`) flag indicates a carry or borrow out of bit `3` in the destination operand. It is primarily used in binary coded decimal arithmetic, but can be used in other contexts. Suppose we add `1` to `0Fh`. The sum (`10h`) contains a `1` in bit position `4 `that was carried out of bit position `3`:
+
+```assembly
+mov al, 0Fh
+sub al, 1     ; AC = 1
+```
+
+Here is the arithmetic:
+
+```
+ 00001111
++00000001
+----------
+ 00010000
+```
+
+###### Parity
+
+The Parity flag (`PF`) is set when the least significant byte of the destination has an even number of `1` bits. The following `ADD` and `SUB` instructions alter the parity of `AL`:
+
+```assembly
+mov al, 10001100b
+add al, 00000010b   ; AL = 10001110, PF = 1
+sub al, 10000000b   ; AL = 00001110, PF = 0
+```
+
+After the `ADD` instruction executes, `AL` contains binary `10001110` (four `0` bits and four `1` bits), and `PF = 1`. After the `SUB` instruction executes, `AL` contains an odd number of `1` bits, so the Parity flag equals `0`.
+
+###### Signed Operations: Sign and Overflow Flags
+
+###### Sign Flag
+
+The Sign flag is set when the result of a signed arithmetic operation is negative. The next example subtracts a larger integer (`5`) from a smaller one (`4`):
+
+```assembly
+mov eax, 4
+sub eax, 5  ; EAX = -1, SF = 1
+```
+
+From a mechanical point of view, the Sign flag is a copy of the destination operand's high bit. The next example shows the hexadecimal values of `BL` when a negative result is generated:
+
+```assembly
+mov bl, 1  ; BL = 01h
+sub bl, 2  ; BL = FFh (-1), SF = 1
+```
+
+###### Overflow Flag
+
+The Overflow flag is set when the result of a signed arithmetic operation overflows or underflows the destination operand. For example, adding `1` to a signed integer byte holding the value `+127` causes the value to become negative:
+
+```assembly
+mov al, +127
+sub al, 1     ; OF = 1
+```
+
+Similarly, adding `1` to a negative integer byte underflows the value:
+
+```assembly
+mov al, -128
+sub al, 1     ; OF = 1
+```
+
+###### The Addition Test
+
+There is a very easy way to tell whether signed overflow has occurred when adding two operands. Overflow occurs when:
+
+- Adding two positive operands generates a negative sum
+- Adding two negative operands generates a positive sum
+
+Overflow never occurs when the signs of two addition operands are different.
+
+###### How the Hardware Detects Overflow
+
+The CPU uses an interesting mechanism to determine the state of the Overflow flag after an addition or subtraction operation. The value that carries out of the highest bit position is exclusive `OR`ed with the carry into the high bit of the result. The resulting value is placed in the Overflow flag. For example adding the 8-bit binary integers `10000000` and `11111110` produces `CF = 1`, with `carryIn(bit7) = 0`. In other words, `1 XOR 0` produces `OF = 1`.
+
+![Demonstration of how the Overflow flag is set.](./chapter4/screenshots/fig4-5.png)
+
+###### NEG Instruction
+
+The `NEG` instruction produces an invalid result if the destination operand cannot be stored correctly. For example, if we move `-128` to `AL` and try to negate it, the correct value (`+128`) will not fit into `AL`. The Overflow flag is set, indicating that `AL` contains an invalid value:
+
+```assembly
+mov al, -128  ; AL = 10000000b
+neg al        ; AL = 10000000b, OF = 1
+```
+
+On the other hand, if `+127` is negated, the result is valid and the Overflow flag is clear:
+
+```assembly
+mov al, +127  ; AL = 01111111b
+neg al        ; AL = 10000001b, OF = 0
+```
+
+The CPU doesn't know whether an arithmetic operation is signed or unsigned. The CPU sets all status flags after an arithmetic operation using a set of boolean rules, regardless of which flags are relevant. It's up to the programmer to decide which flags to interpret and which to ignore, based on your knowledge of the type of operation performed.
+
+#### Page 344-345
+
+###### Example Program (AddSubTest)
+
+The [*AddSubTest*](./chapter4/AddSubTest.asm) program shown below implements various arithmetic expressions using the `ADD`, `SUB`, `INC`, `DEC`, and `NEG` instructions, and shows how certain status flags are affected:
+
+```assembly
+; Addition and Subtraction  (AddSubTest.asm)
+
+.386
+.model flat, stdcall
+.stack 4096
+ExitProcess proto, dwExitCode: dword
+.data
+  Rval SDWORD ?
+  Xval SDWORD 26
+  Yval SDWORD 30
+  Zval SDWORD 40
+
+.code
+  main PROC
+    ; INC and DEC
+    mov ax, 1000h
+    inc ax          ; 1001h
+    dec ax          ; 1000h
+
+    ; Expression: Rval = -Xval + (Yval - Zval)
+    mov eax, Xval
+    neg eax         ; -26
+    mov ebx, Yval
+    sub ebx, Zval   ; -10
+    add eax, ebx
+    mov Rval, eax   ; -36
+
+    ; Zero flag example:
+    mov cx, 1
+    sub cx, 1       ; ZF = 1
+    mov ax, 0FFFFh
+    inc ax          ; ZF = 1
+
+    ; Sign flag example:
+    mov cx, 0
+    sub cx, 1       ; SF = 1
+    mov ax, 7FFFh
+    add ax, 2       ; SF = 1
+
+    ; Carry flag example:
+    mov al, 0FFh
+    add al, 1       ; CF = 1, AL = 00
+
+    ; Overflow flag example:
+    mov al, +127
+    add al, 1       ; OF = 1
+    mov al, -128
+    sub al, 1       ; OF = 1
+
+    INVOKE ExitProcess, 0
+  main ENDP
+  END main
+```
+
+#### Page 349-360
+
+###### Data-Related Operators and Directives
+
+Operators and directives are not executable instructions; instead, they are interpreted by the assembler. Directives can be used to get information about the addresses and size characteristics of data:
+
+- The `OFFSET` operator returns the distance of a variable from the beginning of its enclosing segment.
+- The `PTR` operator lets you override an operan''s default size.
+- The `TYPE` operator returns the size (in bytes) of an operand or of each element in an array.
+- The `LENGTHOF` operator returns the number of elements in an array.
+- The `SIZEOF` operator returns the number of bytes used by an array initializer.
+
+In addition, the `LABEL` directive provides a way to redefine the same variable with different size attributes.
+
+###### OFFSET Operator
+
+The `OFFSET` operator returns the offset of a data label. The offset represents the distance, in bytes, of the label from the beginning of the data segment.
+
+![A variable named myByte.](./chapter4/screenshots/fig4-6.png)
+
+###### OFFSET Examples
+
+```assembly
+.data
+  bVal  BYTE  ?
+  wVal  WORD  ?
+  dVal  DWORD ?
+  dVal2 DWORD ?
+```
+
+If `bVal` were located at offset `00404000`, the `OFFSET` operator would return the following values:
+
+```assembly
+mov esi, OFFSET bVal    ; ESI = 00404000h
+mov esi, OFFSET wVal    ; ESI = 00404001h
+mov esi, OFFSET dVal    ; ESI = 00404003h
+mov esi, OFFSET dVal2   ; ESI = 00404007h
+```
+
+`OFFSET` can also be applied to a direct-offset operand. Suppose `myArray` contains five 16-bit words. The following `MOV` instruction obtains the offset of `myArray`, adds `4`, and moves the resulting address to `ESI`. We can say that `ESI` points to the third integer in the array:
+
+```assembly
+.data
+  myArray WORD 1, 2, 3, 4, 5
+.code
+  mov esi, OFFSET myArray + 4
+```
+
+You can initialize a doubleword variable with the offset of another variable, effectively creating a pointer. In the following example, `pArray` points to the beginning of `bigArray`:
+
+```assembly
+.data
+  bigArray DWORD 500 DUP(?)
+  pArray DWORD bigArray
+```
+
+The following statement loads the pointer's value into `ESI`, so the register can point to the beginning of the array:
+
+```assembly
+mov esi, pArray
+```
+
+###### ALIGN Directive
+
+The `ALIGN` directive aligns a variable on a byte, word, doubleword, or paragraph boundary. The bound can be `1`, `2`, `4`, `8`, or `16. A value of `1` aligns the next variable on a 1-byte boundary (the default). If bound is `2`, the next variable is aligned on an even-numbered address. If bound is `4`, the next address is a multiple of `4`. If bound is `16`, the next address is a multiple of `16`, a paragraph boundary. The assembler can insert one or more empty bytes before the variable to fix the alignment. The CPU can process data stored at even-numbered addresses more quickly than those at odd-numbered addresses.
+
+In the following example, `bVal` is arbitrarily located at `00404000`. Inserting the `ALIGN 2` directive before `wVal` causes it to be assigned an even-numbered offset:
+
+```assembly
+bVal  BYTE  ?   ; 00404000h
+ALIGN 2
+wVal  WORD  ?   ; 00404002h
+bVal2 BYTE  ?   ; 00404004h
+ALIGN 4
+dVal  DWORD ?   ; 00404004h
+dVal2 DWORD ?   ; 0040400Ch
+```
+
+Note that `dVal` would have been at offset `00404005`, but the `ALIGN 4` directive bumped it up to offset `00404008`.
+
+###### PTR Operator
+
+You can use the `PTR` operator to override the declared size of an operand. This is only necessary when you're trying to access the operand using a size attribute that is different from the one assumed by the assembler.
+
+Suppose, for example, you would like to move the lower 16 bits of a doubleword variable named `myDouble` into `AX`. The assembler will not permit the following move because the operand sizes do not match:
+
+```assembly
+.data
+  myDouble DWORD 12345678h
+.code
+  mov ax, myDouble          ; error
+```
+
+However, the `WORD PTR` operator makes it possible to move the low- order word (`5678h`) to `AX`:
+
+```assembly
+mov ax, WORD PTR myDouble
+```
+
+![Memory layout of myDouble.](./chapter4/screenshots/fig4-7.png)
+
+We can access memory in any of these three ways, independent of the way a variable was defined. For example, if `myDouble` begins at offset `0000`, the 16-bit value stored at that address is `5678h`. We could also retrieve `1234h`, the word at location `myDouble + 2`, using the following statement:
+
+```assembly
+mov ax, WORD PTR [myDouble+2]   ; 1234h
+```
+
+Similarly, we could use the `BYTE PTR` operator to move a single byte from `myDouble` to `BL`:
+
+```assembly
+mov bl, BYTE PTR myDouble   ; 78h
+```
+
+Note that `PTR` must be used in combination with one of the standard assembler data types, `BYTE`, `SBYTE`, `WORD`, `SWORD`, `DWORD`, `SDWORD`, `FWORD`, `QWORD`, or `TBYTE`.
+
+###### Moving Smaller Values into Larger Destinations
+
+We might want to move two smaller values from memory to a larger destination operand. In the next example, the first word is copied to the lower half of `EAX` and the second word is copied to the upper half. The `DWORD PTR` operator makes this possible:
+
+```assembly
+.data
+  wordList WORD 5678h, 1234h
+.code
+  mov eax, DWORD PTR wordList   ; EAX = 12345678h
+```
+
+###### TYPE Operator
+
+The `TYPE` operator returns the size, in bytes, of a single element of a variable. For example, the `TYPE` of a byte equals `1`, the `TYPE` of a word equals `2`, the `TYPE` of a doubleword is `4`, and the `TYPE` of a quadword is `8`. Here are examples of each:
+
+```assembly
+.data
+  var1 BYTE ?
+  var2 WORD ?
+  var3 DWORD ?
+  var4 QWORD ?
+.code
+  TYPE var1   ; 1
+  TYPE var2   ; 2
+  TYPE var3   ; 4
+  TYPE var4   ; 8
+```
+
+###### LENGTHOF Operator
+
+The `LENGTHOF` operator counts the number of elements in an array, defined by the values appearing on the same line as its label:
+
+```assembly
+.data
+  byte1    BYTE 10, 20, 30
+  array1   WORD 30 DUP(?), 0, 0
+  array2   WORD 5 DUP(3 DUP(?))
+  array3   DWORD 1, 2, 3, 4
+  digitStr BYTE "12345678", 0
+.code
+  LENGTHOF byte1      ; 3
+  LENGTHOF array1     ; 30 + 2
+  LENGTHOF array2     ; 5 * 3
+  LENGTHOF array3     ; 4
+  LENGTHOF digitStr   ; 9
+```
+
+When nested `DUP` operators are used in an array definition, `LENGTHOF` returns the product of the two counters.
+
+If you declare an array that spans multiple program lines, `LENGTHOF` only regards the data from the first line as part of the array. Given the following data, `LENGTHOF myArray` would return the value `5`:
+
+```assembly
+myArray BYTE 10, 20, 30, 40, 50
+        BYTE 60, 70, 80, 90, 100
+```
+
+Alternatively, you can end the first line with a comma and continue the list of initializers onto the next line. Given the following data, `LENGTHOF myArra`y would return the value `10`:
+
+```assembly
+myArray BYTE 10, 20, 30, 40, 50,
+             60, 70, 80, 90, 100
+```
+
+###### SIZEOF Operator
+
+The SIZEOF operator returns a value that is equivalent to multiplying `LENGTHOF` by `TYPE`. In the following example, `intArray` has `TYPE = 2` and `LENGTHOF = 32`. Therefore, `SIZEOF intArray` equals `64`:
+
+```assembly
+.data
+  intArray WORD 32 DUP(0)
+.code
+  mov eax, SIZEOF intArray  ; EAX = 64
+```
+
+###### LABEL Operator
+
+The `LABEL` directive lets you insert a label and give it a size attribute without allocating any storage. All standard size attributes can be used with `LABEL`, such as `BYTE`, `WORD`, `DWORD`, `QWORD` or `TBYTE`. A common use of `LABEL` is to provide an alternative name and size attribute for the variable declared next in the data segment. In the following example, we declare a label just before `val32` named `val16` and give it a `WORD` attribute:
+
+```assembly
+.data
+  val16 LABEL WORD
+  val32 DWORD 12345678h
+.code
+  mov eax, val16      ; AX = 5678h
+  mov dx, [val16+2]   ; DX = 1234h
+```
+
+`val16` is an alias for the same storage location as `val32`. The `LABEL` directive itself allocates no storage.
+
+Sometimes we need to construct a larger integer from two smaller integers. In the next example, a 32-bit value is loaded into `EAX` from two 16-bit variables:
+
+```assembly
+.data
+  LongValue LABEL WORD
+  val1 WORD 5678h
+  val2 WORD 1234h
+.code
+  move eax, LongValue   ; EAX = 12345678h
+```
+
+#### Page 363-374
+
+###### Indirect Addressing
+
+Direct addressing is rarely used for array processing because it is impractical to use constant offsets to address more than a few array elements. Instead, we use a register as a pointer (called *indirect addressing*) and manipulate the register's value. When an operand uses indirect addressing, it is called an ***indirect operand***.
+
+###### Indirect Operands
+
+###### Protected Mode
+
+An indirect operand can be any 32-bit general-purpose register (`EAX`, `EBX`, `ECX`, `EDX`, `ESI`, `EDI`, `EBP`, and `ESP`) surrounded by brackets. The register is assumed to contain the address of some data. In the next example, `ESI` contains the offset of `byteVal`. The `MOV` instruction uses the indirect operand as the source, the offset in `ESI` is dereferenced, and a byte is moved to `AL`:
+
+```assembly
+.data
+  byteVal BYTE 10h
+.code
+  mov esi, OFFSET byteVal
+  mov al, [esi]             ; AL = 10h
+```
+
+If the destination operand uses indirect addressing, a new value is placed in memory at the location pointed to by the register. In the following example, the contents of the `BL` register are copied to the memory location addressed by `ESI`.
+
+```assembly
+mov [esi], bl
+```
+
+###### Using `PTR` with Indirect Operands
+
+The size of an operand may not be evident from the context of an instruction. The following instruction causes the assembler to generate an "operand must have size" error message:
+
+```assembly
+inc [esi] ; error operand must have a size
+```
+
+The assembler does not know whether `ESI` points to a byte, word, doubleword, or some other size. The `PTR` operator confirms the operand size, as the example here shows:
+
+```assembly
+inc BYTE PTR [esi]
+```
+
+###### Arrays
+
+Indirect operands are ideal tools for stepping through arrays. In the following code example, `arrayB` contains `3` bytes. As `ESI` is incremented, it points to each byte, in order:
+
+```assembly
+.data
+  arrayB BYTE 10h, 20h, 30h
+.code
+  mov esi, OFFSET arrayB
+  mov al, [esi]           ; AL = 10h
+  inc esi
+  mov al, [esi]           ; AL = 20h
+  inc esi
+  mov al, [esi]           ; AL = 30h
+```
+
+If we use an array of 16-bit integers, we add `2` to `ESI` to address each subsequent array element:
+
+```assembly
+.data
+  arrayW WORD 1000h, 2000h, 3000h
+.code
+  mov esi, OFFSET arrayW
+  mov ax, [esi]           ; AL = 1000h
+  add esi, 2
+  mov ax, [esi]           ; AL = 2000h
+  add esi, 2
+  mov ax, [esi]           ; AL = 3000h
+```
+
+![Initial value of ESI in relation to the array data](./chapter4/screenshots/fig4-8.png)
+
+###### Indexed Operands
+
+An ***indexed operand*** adds a constant to a register to generate an effective address. Any of the 32-bit general-purpose registers may be used as index registers. Two basic formats are permitted by MASM (the brackets are part of the notation):
+
+```
+constant[reg]
+[constant + reg]
+```
+
+Indexed operands can appear in one of two different formats, as either a variable name combined with a register, or as a constant integer combined with a register. In the first format, the variable name is translated by the assembler into a constant that represents the variable's offset. Here are examples that show both notational forms:
+
+| 1st format | 2nd format     |
+| ---------- | -------------- |
+| arrayB[esi]| [arrayB + esi] |
+| arrayD[ebx]| [arrayD + ebx] |
+
+Indexed operands are ideally suited to array processing. The index register should be initialized to zero before accessing the first array element:
+
+```assembly
+.data
+  arrayB BYTE 10h, 20h, 30h
+.code
+  mov esi, 0
+  mov al, arrayB[esi]       ; AL = 10h
+```
+
+The second `mov` instruction in this example adds `ESI` to the offset of `arrayB`. The address generated by the expression `arrayB[esi]` is dereferenced and the byte in memory is copied to `AL`.
+
+###### Adding Displacements
+
+Earlier, we said there are two basic formats for indexed addressing, and the first one we showed was a variable name combined with a register. Let's now look at the second format, which combines a register with a constant offset, in either order. The index register holds the base address of an array or structure, and the constant identifies offsets of various array elements. The following code example shows how to do this with an array of 16-bit integers:
+
+```assembly
+.data
+  arrayW WORD 1000h, 2000h, 3000h
+.code
+  mov esi, OFFSET arrayW
+  mov ax, [esi]           ; AX = 1000h
+  mov ax, [esi+2]         ; AX = 2000h
+  mov ax, [esi+4]         ; AX = 3000h
+  mov ax, [4+esi]         ; AX = 3000h
+```
+
+###### Using 16-Bit Registers
+
+In real-address mode programs we can only use a limited set of 16-bit registers (namely `SI`, `DI`, `BX`, and `BP`) in indexed operands. Here are some examples:
+
+```assembly
+mov al, arrayB[si]
+mov ax, arrayW[di]
+mov eax, arrayD[bx]
+```
+
+As is the case with indirect operands, avoid using `BP` except when addressing data on the stack.
+
+###### Scale Factors in Indexed Operands
+
+Indexed operands must take into account the size of each array element when calculating offsets. Using an array of doublewords, as in the following example, we multiply the subscript (`3`) by `4` (the size of a doubleword) to generate the offset of the array element containing `400h`:
+
+```assembly
+.data
+  arrayD DWORD 100h, 200h, 300h, 400h
+.code
+  mov esi, 3 * TYPE arrayD              ; offset of arrayD[3]
+  mov eax, arrayD[esi]                  ; EAX = 400h
+```
+
+The x86 instruction set provides a way for offsets to be calculated, using a ***scale factor***. The *scale factor* is the size of the array component. Let's revise our previous example by setting `ESI` to the array subscript (`3`) and multiplying `ESI` by the scale facotr (`4`) for doublewords:
+
+```assembly
+.data
+  arrayD DWORD 1, 2, 3, 4
+.code
+  mov esi, 3                ; subscript
+  mov eax, arrayD[esi * 4]  ; EAX = 4
+```
+
+The `TYPE` operator can make the indexing more flexible should `arrayD` be redefined as another type in the future:
+
+```assembly
+mov esi, 3                          ; subscript
+mov eax, arrayD[esi * TYPE arrayD]  ; EAX = 4
+```
+
+###### Pointers
+
+A variable containing the address of another variable is called a ***pointer***. Pointers are great tools for manipulating arrays and data structures because the addresses they hold can be modified at runtime. We could use a system call to allocate a block of memory, for example, and save the address of that block in a variable. A pointer's size is affected by the processor's current mode (32-bit or 64-bit). In the following 32-bit code example, `ptrB` contains the offset of `arrayB`:
+
+```assembly
+.data
+  arrayB byte 10h, 20h, 30h, 40h
+  ptrB dword arrayB
+```
+
+We could also declare `ptrB` with the `OFFSET` operator to make the relationship more explicit:
+
+```assembly
+.data
+  ptrB dword OFFSET arrayB
+```
+
+###### TYPEDEF Operator
+
+The `TYPEDEF` operator lets you create a user-defined type that appears in the same context as built-in types when defining variables. `TYPEDEF` is ideal for creating pointer variables. For example, the following declaration creates a new data type `PBYTE` that is a pointer to 8-bit data:
+
+```assembly
+PBYTE TYPEDEF PTR BYTE
+```
+
+Such a declaration would usually be placed near the beginning of a program, before the `data` segment, allowing variables to be defined using `PBYTE`.
+
+###### Example Program: Pointers
+
+The [*Pointers*](./chapter4/Pointers.asm) program uses `TYPDEF` to create three pointer types (`PBYTE`, `PWORD`, `PDWORD`). It declares several pointers, assigns several array offsets, and dereferences the pointers.
+
+#### Page 382-390
+
+###### JMP and LOOP Instructions
+
+By default, the CPU loads and executes programs sequentially. But the current instruction might be conditional, meaning that it transfers control to a new location in the program based on the values of CPU status flags. Assembly language programs use conditional instructions to implement high-level statements such as IF statements and loops. Each of the conditional statements involves a possible transfer of control (jump) to a different memory address. A *transfer of control*, or branch, is a way of altering the order in which statements are executed. There are two basic types of transfers:
+
+- ***Unconditional Transfer***: Control is transferred to a new location in all cases; a new address is loaded into the instruction pointer, causing execution to continue at the new address. The `JMP` instruction does this.
+- ***Conditional Transfer***: The program branches if a certain condition is true. A wide variety of conditional transfer instructions can be combined to create conditional logic structures. The CPU interprets true/false conditions based on the contents of the `ECX` and Flags registers.
+
+###### JMP Instruction
+
+When the CPU executes an unconditional transfer, the offset of destination is moved into the instruction pointer, causing execution to continue at the new location.
+
+###### Creating a Loop
+
+The `JMP` instruction provides an easy way to create a loop by jumping to a label at the top of the loop:
+
+```assembly
+top:
+  .
+  .
+  jmp top   ; repeat the endless loop
+```
+
+###### LOOP Instruction
+
+The `LOOP` instruction, formally known as *Loop According to ECX Counter*, repeats a block of statements a specific number of times. ECX is automatically used as a counter and is decremented each time the loop repeats. Its syntax is:
+
+```assembly
+LOOP destination
+```
+
+The loop destination must be within `-128` to `+127` bytes of the current location counter. The execution of the `LOOP` instruction involves two steps: First, it subtracts `1` from `ECX`. Next, it compares `ECX` to zero. If `ECX` is not equal to zero, a jump is taken to the label identified by *destination*. Otherwise, if `ECX` equals zero, no jump takes place, and control passes to the instruction following the loop.
+
+In the following example, we add `1` to `AX` each time the loop repeats. When the loop ends, `AX = 5` and `ECX = 0`:
+
+```assembly
+mov ax, 0
+mov ecx, 5
+
+L1:
+  inc  ax
+  loop L1
+```
+
+> [!CAUTION]
+> A common programming error is to inadvertently initialize `ECX` to zero before beginning a loop. If this happens, the `LOOP` instruction decrements `ECX` to `FFFFFFFFh`, and the loop repeats `4,294,967,296` times! If `CX` is the loop counter (in real-address mode), it repeats `65,536` times.
+
+Occasionally, you might create a loop that is large enough to exceed the allowed relative jump range of the `LOOP` instruction. Following is an example of an error message generated by MASM because the target label of a `LOOP` instruction was too far away:
+
+```
+error A2075: jump destination too far : by 14 byte(s)
+```
+
+Rarely should you explicitly modify `ECX` inside a loop. If you do, the `LOOP` instruction may not work as expected. In the following example, `ECX` is incremented within the loop. It never reaches zero, so the loop never stops:
+
+```assembly
+top:
+  .
+  .
+  inc  ecx
+  loop top
+```
+
+If you need to modify `ECX` inside a loop, you can save it in a variable at the beginning of the loop and restore it just before the `LOOP` instruction:
+
+```assembly
+.data
+  count DWORD ?
+.code
+  mov ecx, 100       ; set loop count
+
+  top:
+    mov count, ecx   ; save the count
+    .
+    mov ecx, 20      ; modify ECX
+    .
+    mov ecx, count   ; restore loop count
+    loop top
+```
+
+###### Nested Loops
+
+When creating a loop inside another loop, special consideration must be given to the outer loop counter in `ECX`. You can save it in a variable:
+
+```assembly
+.data
+  count DWORD ?
+.code
+  mov ecx, 100        ; set outer loop count
+  L1:
+    mov count, ecx    ; save outer loop count
+    mov ecx, 20       ; set inner loop count
+  L2:
+    .
+    .
+    loop L2           ; repeat the inner loop
+    mov  ecx, count   ; restore outer loop counter
+    loop L1           ; repeat the outer loop
+```
+
+###### Summing an Integer Array
+
+In assembly language, you would follow these steps:
+
+1. Assign the array's address to a register that will serve as an indexed operand.
+2. Initialize the loop counter to the length of the array.
+3. Assign zero to the register that accumulates the sum.
+4. Create a label to mark the beginning of the loop.
+5. In the loop body, add a single array element to the sum.
+6. Point to the next array element.
+7. Use a LOOP instruction to repeat the loop.
+
+The [*SumArray*](./chapter4/SumArray.asm) program sums an array of 32-bit integers. The steps are numbered in the individual comment lines.
+
+###### Copying a String
+
+A string can be copied in assembly language, using a loop that copies a string, represented as an array of bytes with a null terminator value. Indexed addressing works well for this type of operation because the same index register references both strings. The target string must have enough available space to receive the copied characters, including the null byte at the end. The [*CopyStr*](./chapter4/CopyStr.asm) program does exactly that.
+
+The `MOV` instruction cannot have two memory operands, so each character is moved from the source string to `AL`, then from `AL` to the target string.
+
+#### Page 398-404
+
+###### 64-Bit Programming
+
+###### MOV Instruction
+
+There are just a few differences between the 32- bit mode and 64-bit mode for the `MOV` instruction. Immediate operands may be `8`, `16`, `32`, or `64` bits. Here's a 64- bit example:
+
+```assembly
+mov rax, 0ABCDEF0AFFFFFFFFh ; 64-bit immediate operand
+```
+
+When you move a 32-bit constant to a 64-bit register, the upper 32 bits (bits 32–63) of the destination are cleared (equal to zero):
+
+```assembly
+mov rax,0FFFFFFFFh ; rax = 00000000FFFFFFFF
+```
+
+When you move a 16-bit constant or an 8-bit constant into a 64-bit register, the upper bits are also cleared:
+
+```assembly
+mov rax, 06666h   ; clears bits 16-63
+mov rax, 055h     ; clears bits 8-63
+```
+
+When you move memory operands into 64-bit registers, however, the results are mixed. For example, moving a 32-bit memory operand into `EAX` (the lower half of `RAX`) causes the upper 32 bits in `RAX` to be cleared:
+
+```assembly
+.data
+  myDword DWORD 80000000h
+.code
+  mov rax, 0FFFFFFFFFFFFFFFFh
+  mov eax, myWord ; RAX = 0000000080000000
+```
+
+But when you move an 8-bit or a 16-bit memory operand into the lower bits of `RAX`, the highest bits in the destination register are not affected:
+
+```assembly
+.data
+  myByte BYTE 55h
+  myWord WORD 6666h
+.code
+  mov ax, myWord    ; bits 16-63 are not affected
+  mov al, myByte    ; bits 8-63 are not affected
+```
+
+The `MOVSXD` instruction permits the source operand to be a 32-bit register or memory operand. The following instructions cause `RAX` to equal `FFFFFFFFFFFFFFFFh`:
+
+```assembly
+mov    ebx, 0FFFFFFFFh
+movsxd rax, ebx
+```
+
+The `OFFSET` operator generates a 64-bit address, which must be held by a 64-bit register or variable. In the following example, we use the `RSI` register:
+
+```assembly
+.data
+  myArray WORD 10, 20, 30, 40
+.code
+  move rsi, OFFSET myArray
+```
+
+The `LOOP` instruction in 64-bit mode uses the RCX register as the loop counter.
+
+###### 64-Bit Version of SumArray
+
+The [*SumArray_64*](./chapter4/SumArray_64.asm) program recreates the [*SumArray*](./chapter4/SumArray.asm) program in 64-bit mode.
+
+###### Addition and Subtraction
+
+The `ADD`, `SUB`, `INC`, and `DEC` instructions affect the CPU status flags in the same way in 64-bit mode as in 32-bit mode. In the following example, we add `1` to a 32-bit number in RAX. Each bit carries to the left, causing a `1` to be inserted in bit 32:
+
+```assembly
+mov rax, 0FFFFFFFFh   ; fill the lower 32 bits
+add rax, 1            ; RAX = 100000000h
+```
+
+When you use a partial register operand, the remainder of the register is not modified. In the next example, the 16-bit sum in `AX` rolls over to zero without affecting the upper bits in `RAX`. This happens because the operation uses 16-bit registers (`AX` and `BX`):
+
+```assembly
+mov rax, 0FFFFh   ; RAX = 000000000000FFFF
+mov bx, 1
+add ax, bx        ; RAX = 0000000000000000
+```
+
+Similarly, in the following example, the sum in AL does not carry into any other bits within RAX. After the ADD, `RAX` equals zero:
+
+```assembly
+mov rax, 0FFh   ; RAX = 00000000000000FF
+mov bl, 1
+add al, bl      ; RAX = 0000000000000000
+```
+
+The same principle applies to subtraction. In the following code excerpt, subtracting `1` from zero in `EAX` causes the lower 32 bits of `RAX` to become equal to `-1` (`FFFFFFFFh`). Similarly, subtracting `1` from zero in `AX` causes the lower 16 bits of `RAX` to become equal to `-1` (`FFFFh`).
+
+```assembly
+mov rax, 0    ; RAX = 0000000000000000
+mov ebx, 1
+sub eax, ebx  ; RAX = 00000000FFFFFFFF
+mov rax, 0    ; RAX = 0000000000000000
+mov bx, 1
+sub ax, bx    ; RAX = 000000000000FFFF
+```
+
+A 64-bit general-purpose register must be used when an instruction contains an indirect operand. Remember that you must use the `PTR` operator to clarify the target operand's size. Here are examples, including one with a 64-bit target:
+
+```assembly
+dec BYTE  PTR [rdi]   ; 8-bit target
+inc WORD  PTR [rbx]   ; 16-bit target
+inc QWORD PTR [rsi]   ; 64-bit target
+```
+
+In 64-bit mode, you can use scale factors in indexed operands, just as you do in 32-bit mode. If you're working with an array of 64-bit integers, use a scale factor of `8`:
+
+```assembly
+.data
+  array QWORD 1, 2, 3, 4
+.code
+  mov esi, 3              ; subscript
+  mov rax, array[rsi*8]   ; RAX
+```
+
+In 64-bit mode, a pointer variable holds a 64-bit offset. In the following example, the `ptrB` variable holds the offset of `arrayB`:
+
+```assembly
+.data
+  arrayB BYTE 10h, 20h, 30h, 40h
+  ptrB QWORD arrayB
+```
+
+Optionally, you can declare `ptrB` with the `OFFSET` operator to make the relationship clearer:
+
+```assembly
+ptrB QWORD OFFSET arrayB
 ```
