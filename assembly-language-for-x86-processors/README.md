@@ -3012,3 +3012,1030 @@ Optionally, you can declare `ptrB` with the `OFFSET` operator to make the relati
 ```assembly
 ptrB QWORD OFFSET arrayB
 ```
+
+## Chapter 5 - Procedures
+
+#### Page 436-447
+
+###### Stack Operations
+
+A ***stack data structure*** follows the same principle as a stack of plates: New data values are added to the top of the stack, and existing values are removed from the top. A stack is often called a ***LIFO structure (Last-In, First-Out)*** because the last value put into the stack is always the first value taken out.
+
+###### Runtime Stack (32-Bit Mode)
+
+The ***runtime stack*** is a memory array managed directly by the CPU, used to keep track of subroutine return addresses, procedure parameters, local variables, and other subroutine-related data. In 32-bit mode, the `ESP` register (known as the ***stack pointer***) holds a 32-bit offset into some location on the stack. We rarely manipulate `ESP` directly; instead, it is indirectly modified by instructions such as `CALL`, `RET`, `PUSH`, and `POP`.
+
+`ESP` always points to the last value to be added to, or pushed on, the top of stack. To demonstrate, let's begin with a stack containing one value. In the next figure `ESP` contains hexadecimal `00001000`, the offset of the most recently pushed value (`00000006`). The top of the stack moves downward when the stack pointer decreases in value:
+
+![A stack containing a single value.](./chapter5/screenshots/fig5-1.png)
+
+Each stack location contains 32 bits when a program is running in 32-bit mode.
+
+###### Push Operation
+
+A ***push operation*** decrements the stack pointer by the appropriate amount according to the instruction operand's size and copies a value into the location in the stack referenced by the stack pointer. If the operand size is 32 bits, for example, the stack pointer is decremented by a value of `4`. Notice that the `ESP` register always points to the last item pushed on the stack. The runtime stack grows downward in memory, from higher addresses to lower addresses.
+
+![Pushing integers on the stack.](./chapter5/screenshots/fig5-2.png)
+
+![Stack, after pushing 00000001 and 00000002.](./chapter5/screenshots/fig5-3.png)
+
+###### Pop Operation
+
+A ***pop operation*** returns a copy of the value in the stack referenced by the stack pointer and increments the stack pointer by the appropriate amount according to the size of the instruction operand. For a 32-bit operand, the stack pointer is incremented by a value of `4`. After the value is popped from the stack, the stack pointer is incremented (by the stack element size) to point to the next-highest location in the stack.
+
+![Popping a value from the runtime stack.](./chapter5/screenshots/fig5-4.png)
+
+The area of the stack below `ESP` (at lower addresses) is logically empty, and will be overwritten the next time the current program executes any instruction that pushes a value on the stack.
+
+###### Stack Applications
+
+There are several important uses of runtime stacks in programs:
+
+- A stack makes a convenient temporary save area for registers when they are used for more than one purpose. After they are modified, they can be restored to their original values.
+- When the `CALL` instruction executes, the CPU saves the current subroutine's return address on the stack.
+- When calling a subroutine, you pass input values called arguments by pushing them on the stack.
+- The stack provides temporary storage for local variables inside subroutines.
+
+###### PUSH and POP Instructions
+
+###### PUSH Instruction
+
+The `PUSH` instruction first decrements `ESP` and then copies a source operand into the stack. A 16-bit operand causes `ESP` to be decremented by `2`. A 32-bit operand causes `ESP` to be decremented by `4`. There are three instruction formats:
+
+```
+PUSH reg/mem16
+PUSH reg/mem32
+PUSH imm32
+```
+
+Here are some examples of statements using valid `PUSH` instructions:
+
+```assembly
+.data
+  my16Val WORD 1234h
+  my32Val DWORD 12345678h
+.code
+  push bx
+  push my16Val
+  push eax
+  push my32Val
+  push 342342h
+```
+
+###### POP Instruction
+
+The `POP` instruction first copies the contents of the stack element pointed to by `ESP` into a 16- or 32-bit destination operand, and then increments `ESP`. If the operand is 16 bits, `ESP` is incremented by `2`; if the operand is 32 bits, `ESP` is incremented by `4`:
+
+```
+POP reg/mem16
+POP reg/mem32
+```
+
+Here are some examples of statements using valid `POP` instructions:
+
+```assembly
+.data
+  my16Val WORD  ?
+  my32Val DWORD ?
+.code
+  pop bx
+  pop my16Val
+  pop eax
+  pop my32Val
+```
+
+###### PUSHFD and POPFD Instructions
+
+The `PUSHFD` instruction pushes the 32-bit `EFLAGS` register on the stack, and `POPFD` pops the stack into `EFLAGS`.
+
+The `MOV` instruction cannot be used to copy the flags to a variable, so `PUSHFD` may be the best way to save the flags. There are times when it is useful to make a backup copy of the flags so you can restore them to their former values later. Often, we enclose a block of code within `PUSHFD` and `POPFD`:
+
+```assembly
+pushfd                                ; save the flags
+;
+; any sequence of statements here...
+;
+popfd                                 ; restore the flags
+```
+
+When using pushes and pops of this type, be sure the program's execution path does not skip over the `POPFD` instruction. When a program is modified over time, it can be tricky to remember where all the pushes and pops are located.
+
+A less error-prone way to save and restore the flags is to push them on the stack and immediately pop them into a variable:
+
+```assembly
+.data
+  saveFlags DWORD ?
+.code
+  pushfd          ; push flags on stack
+  pop saveFlags   ; copy into a variable
+```
+
+The following statements restore the flags from the same variable:
+
+```assembly
+push saveFlags  ; push saved flag values
+popfd           ; copy into the flags
+```
+
+###### PUSHAD, PUSHA, POPAD, and POPA
+
+The `PUSHAD` instruction pushes all of the 32-bit general-purpose registers on the stack in the following order: `EAX`, `ECX`, `EDX`, `EBX`, `ESP` (value before executing `PUSHAD`), `EBP`, `ESI`, and `EDI`. The `POPAD` instruction pops the same registers off the stack in reverse order. Similarly, the `PUSHA` instruction, pushes the 16-bit general-purpose registers (`AX`, `CX`, `DX`, `BX`, `SP`, `BP`, `SI`, `DI`) on the stack in the order listed. The `POPA` instruction pops the same registers in reverse. You should only use `PUSHA` and `POPA` when programming in 16-bit mode.
+
+If you write a procedure that modifies a number of 32-bit registers, use `PUSHAD` at the beginning of the procedure and `POPAD` at the end to save and restore the registers. The following code fragment demonstrates a common pattern:
+
+```assembly
+MySub PROC
+  pushad        ; save general-purpose registers
+  .
+  .
+  mov eax,...
+  mov edx,...
+  mov ecx,...
+  .
+  .
+  popad         ; restore general-purpose registers
+  ret
+MySub ENDP
+```
+
+An important exception to the foregoing example must be pointed out; procedures returning results in one or more registers should not use `PUSHA` and `PUSHAD`. Suppose the following `ReadValue` procedure returns an integer in `EAX`; the call to `POPAD` overwrites the return value from `EAX`:
+
+```assembly
+ReadValue PROC
+  pushad                  ; save general-purpose registers
+  .
+  mov eax, return_value
+  .
+  popad                   ; error: overwrites EAX!
+  ret
+ReadValue ENDP
+```
+
+###### Example: Reversing a String
+
+The [*RevStr*](./chapter5/RevStr.asm) program loops through a string and pushes each character on the stack. It then pops the letters from the stack (in reverse order) and stores them back into the same string variable. Because the stack is a LIFO (last-in, first-out) structure, the letters in the string are reversed.
+
+#### Page 451-465
+
+###### Defining and Using Procedures
+
+###### PROC Directive
+
+###### Defining a Procedure
+
+A ***procedure*** is a named block of statements that ends in a return statement. A procedure is declared using the `PROC` and `ENDP` directives. It must be assigned a name. Each program we've written so far contains a procedure named main, for example:
+
+```assembly
+main PROC
+.
+.
+main ENDP
+```
+
+When you create a procedure other than the program's startup procedure, it has to end with a `RET` instruction. `RET` forces the CPU to return to the location from where the procedure was called:
+
+```assembly
+sample PROC
+  .
+  .
+  ret
+sample ENDP
+```
+
+###### Labels in Procedures
+
+By default, code labels are visible only within the procedure in which they are declared. This rule often affects jump and loop instructions. In the following example, the label named `Destination` must be located in the same procedure as the `JMP` instruction:
+
+```assembly
+jmp Destination
+```
+
+It is possible to work around this limitation by declaring a ***global label***, identified by a double colon (`::`) after its name:
+
+```assembly
+Destination::
+```
+
+> [!CAUTION]
+> In terms of program design, it's not a good idea to jump or loop outside of the current procedure. Procedures have an automated way of returning and adjusting the runtime stack. If you directly transfer out of a procedure, the runtime stack can easily become corrupted.
+
+###### Example: SumOf Three Integers
+
+Let's create a procedure named `SumOf` that calculates the sum of three 32-bit integers. We will assume that relevant integers are assigned to `EAX`, `EBX`, and `ECX` before the procedure is called. The procedure returns the sum in `EAX`:
+
+```assembly
+SumOf PROC
+  add eax, ebx
+  add eax, ecx
+  ret
+SumOf ENDP
+```
+
+###### Documenting Procedures
+
+The following are a few suggestions for information you can put at the beginning of each procedure:
+
+- A description of all tasks accomplished by the procedure.
+- A list of input parameters and their usage, labeled by a word such as `Receives`. If any input parameters have specific requirements for their input values, list them here.
+- A description of any values returned by the procedure, labeled by a word such as `Returns`.
+- A list of any special requirements, called ***preconditions***, that must be satisfied before the procedure is called. These can be labeled by the word `Requires`. For example, for a procedure that draws a graphics line, a useful precondition would be that the video display adapter must already be in graphics mode.
+
+An documented version of the `SumOf` procedure:
+
+```assembly
+;---------------------------------------------------------
+; SumOf
+;
+; Calculates and returns the sum of three 32-bit integers.
+; Receives: EAX, EBX, ECX, the three integers. May be
+;           signed or unsigned.
+; Returns:  EAX = sum
+;---------------------------------------------------------
+SumOf PROC
+  add eax, ebx
+  add eax, ecx
+  ret
+SumOf ENDP
+```
+
+###### CALL and RET Instructions
+
+The `CALL` instruction calls a procedure by directing the processor to begin execution at a new memory location. The procedure uses a `RET` (return from procedure) instruction to bring the processor back to the point in the program where the procedure was called. Mechanically speaking, the `CALL` instruction pushes its return address on the stack and copies the called procedure's address into the instruction pointer. When the procedure is ready to return, its `RET` instruction pops the return address from the stack into the instruction pointer. In 32-bit mode, the CPU executes the instruction in memory pointed to by `EIP`. In 16-bit mode, `IP` points to the instruction.
+
+###### CALL and Return Example
+
+Suppose that in main, a `CALL` statement is located at offset `00000020`. Typically, this instruction requires 5 bytes of machine code, so the next statement is located at offset `00000025`:
+
+```
+main PROC
+00000020    call MySub
+00000025    mov  eax, ebx
+```
+
+Next, suppose that the first executable instruction in `MySub` is located at offset `00000040`:
+
+```
+MySub PROC
+00000040    mov eax, edx
+            .
+            .
+            ret
+MySub ENDP
+```
+
+When the `CALL` instruction executes, the address following the call (`00000025`) is pushed on the stack and the address of `MySub` is loaded into `EIP`. All instructions in `MySub` execute up to its `RET` instruction. When the `RET` instruction executes, the value in the stack pointed to by `ESP` is popped into `EIP`. In step 2, `ESP` is incremented so it points to the previous value on the stack.
+
+![Executing a CALL instruction.](./chapter5/screenshots/fig5-5.png)
+
+![Executing a RET instruction.](./chapter5/screenshots/fig5-6.png)
+
+###### Nested Procedure Calls
+
+A ***nested procedure call*** occurs when a called procedure calls another procedure before the first procedure returns. Suppose the main procedure calls a procedure named `Sub1`. While `Sub1` is executing, it calls the `Sub2` procedure. While `Sub2` is executing, it calls the `Sub3` procedure.
+
+When the `RET` instruction at the end of `Sub3` executes, it pops the value at stack[ESP] into the instruction pointer. This causes execution to resume at the instruction following the call `Sub3` instruction. After the return, `ESP` points to the next-highest stack entry.
+
+###### Passing Register Arguments to Procedures
+
+If you write a procedure that performs some standard operation such as calculating the sum of an integer array, it's not a good idea to include references to specific variable names inside the procedure. If you did, the procedure could only be used with one array. A better approach is to pass the offset of an array to the procedure and pass an integer specifying the number of array elements. In assembly language, it is common to pass arguments inside general-purpose registers.
+
+Previously, we created a procedure named `SumOf` that added the integers in the `EAX`, `EBX`, and `ECX` registers. In main, before calling `SumOf`, we assign values to `EAX`, `EBX`, and `ECX`:
+
+```assembly
+.data
+  theSum DWORD ?
+.code
+  main PROC
+    mov  eax, 10000h  ; argument
+    mov  ebx, 20000h  ; argument
+    mov  ecx, 30000h  ; argument
+    call SumOf        ; EAX = (EAX + EBX + ECX)
+    mov  theSum, eax  ; save the sum
+  main ENDP
+  END main
+```
+
+###### Example: Summing an Integer Array
+
+The procedure `ArraySum` receives two parameters from a calling program: a pointer to an array of 32-bit integers, and a count of the number of array values. It calculates and returns the sum of the array in `EAX`:
+
+```assembly
+;---------------------------------------------------------
+; ArraySum
+;
+; Calculates the sum of an array of 32-bit integers.
+; Receives: ESI = the array offset
+;           ECX = number of elements in the array
+; Returns:  EAX = sum of the array elements
+;---------------------------------------------------------
+ArraySum PROC
+  push esi                  ; save ESI, ECX
+  push ecx
+  mov  eax, 0               ; set the sum to zero
+
+  L1: add  eax, [esi]       ; add each integer to sum
+      add  esi, TYPE DWORD  ; point to next integer
+      loop L1               ; repeat for array size
+      
+      pop  ecx              ; restore ECX, ESI
+      pop  esi
+      ret                   ; sum is in EAX
+ArraySum ENDP
+```
+
+###### Testing the ArraySum Procedure
+
+The [*TestArraySum*](./chapter5/TestArraySum.asm) tests the `ArraySum` procedure by calling it and passing the offset and length of an array of 32-bit integers. After calling `ArraySum`, the program saves the procedure's return value in a variable named `theSum`.
+
+###### Saving and Restoring Registers
+
+In the `ArraySum` example, `ECX` and `ESI` were pushed on the stack at the beginning of the procedure and popped at the end. This action is typical of most procedures that modify registers. When possible, we save and restore registers modified by a procedure so the calling program can be sure that none of its own register values will be overwritten. The exception to this rule pertains to registers used as return values, usually `EAX`. Do not push and pop them.
+
+###### USES Operator
+
+The `USES` operator, coupled with the `PROC` directive, conveniently lets you list the names of all registers you want to save and restore within a procedure. `USES` tells the assembler to do two things: First, generate `PUSH` instructions that save the registers on the stack at the beginning of the procedure. Second, generate `POP` instructions that restore the register values at the end of the procedure. The `USES` operator immediately follows `PROC`, and is itself followed by a list of registers on the same line separated by spaces or tabs.
+
+The `ArraySum` procedure from will look like the following agfter updating it to use the `USES` operator:
+
+```assembly
+ArraySum PROC USES esi ecx
+  mov  eax, 0               ; set the sum to zero
+
+  L1: add  eax, [esi]       ; add each integer to sum
+      add  esi, TYPE DWORD  ; point to next integer
+      loop L1               ; repeat for array size
+      
+      ret                   ; sum is in EAX
+ArraySum ENDP
+```
+
+#### Page 470-472
+
+###### Linking to an External Library
+
+###### Background Information
+
+A ***link library*** is a file containing procedures that have been assembled into machine code. A link library begins as one or more source code files, which are assembled into object files. The object files are inserted into a link library file. Suppose a program displays a string in the console window by calling a procedure named `WriteString`. The program source must contain a `PROTO` directive identifying the `WriteString` procedure:
+
+```assembly
+WriteString proto
+```
+
+Then, a `CALL` instruction can execute `WriteString` when needed.
+
+When the program is assembled, the assembler leaves the target address of the `CALL` instruction blank, knowing that it will be filled in by the linker. The linker looks for `WriteString` in the link library and copies the appropriate machine instructions from the library into the program's executable file. In addition, it inserts `WriteString`'s address into the `CALL` instruction. If a procedure you're calling is not in the link library, the linker issues an error message and does not generate an executable file.
+
+###### Linker Command Options
+
+The linker utility combines a program's object file with one or more object files and link libraries. The following command, for example, links `hello.obj` to the `irvine32.lib` and `kernel32.lib` library files:
+
+###### Linking 32-Bit Programs
+
+The `kernel32.lib` file, part of the Microsoft Windows Platform Software Development Kit, contains linking information for system functions located in a file named `kernel32.dll`. The latter is a fundamental part of MS- Windows, and is called a *dynamic link library*. It contains executable functions that perform character-based input–output.
+
+![Linking 32-bit programs.](./chapter5/screenshots/fig5-7.png)
+
+#### Page 476-525
+
+###### The Irvine32 Library
+
+###### Individual Procedure Descriptions
+
+###### CloseFile
+
+The `CloseFile` procedure closes a file that was previously created or opened. The file is identified by a 32-bit integer handle, which is passed in `EAX`. If the file is closed successfully, the value returned in `EAX` will be nonzero:
+
+```assembly
+mov  eax, fileHandle
+call CloseFile
+```
+
+###### Clrscr
+
+The `Clrscr` procedure clears the console window. This procedure is typically called at the beginning and end of a program. If you call it at other times, you may need to pause the program by first calling `WaitMsg`. Doing this allows the user to view information already on the screen before it is erased:
+
+```assembly
+call WaitMsg  ; "Press any key..."
+call Clrscr
+```
+
+###### CreateOutputFile
+
+The `CreateOutputFile` procedure creates a new disk file and opens it for writing. When you call the procedure, place the offset of a filename in `EDX`. When the procedure returns, `EAX` will contain a valid file handle (32-bit integer) if the file was created successfully. Otherwise, `EAX` equals `INVALID_HANDLE_VALUE` (a predefined constant):
+
+```assembly
+.data
+  filename BYTE "newfile.txt", 0
+.code
+  mov  edx, OFFSET filename
+  call CreateOutputFile
+```
+
+###### Crlf
+
+The `Crlf` procedure advances the cursor to the beginning of the next line in the console window. It writes a string containing the ASCII character codes `0Dh` and `0Ah`:
+
+```assembly
+call Crlf
+```
+
+###### Delay
+
+The `Delay` procedure pauses the program for a specified number of milliseconds. Before calling `Delay`, set `EAX` to the desired interval:
+
+```assembly
+mov  eax, 1000  ; 1 second
+call Delay
+```
+
+###### DumpMem
+
+The `DumpMem` procedure writes a range of memory to the console window in hexadecimal. Pass it the starting address in `ESI`, the number of units in `ECX`, and the unit size in `EBX`:
+
+```assembly
+.data
+  array DWORD 1,2,3,4,5,6,7,8,9,0Ah,0Bh
+.code
+  main PROC
+    mov  esi, OFFSET array    ; starting OFFSET
+    mov  ecx, LENGTHOF array  ; number of units
+    mov  ebx, TYPE array      ; doubleword format
+    call DumpMem
+```
+
+The following output is produced:
+
+```
+00000001 00000002 00000003 00000004 00000005
+00000006
+00000007 00000008 00000009 0000000A 0000000B
+```
+
+###### DumpRegs
+
+The `DumpRegs` procedure displays the `EAX`, `EBX`, `ECX`, `EDX`, `ESI`, `EDI`, `EBP`, `ESP`, `EIP`, and `EFL` (`EFLAGS`) registers in hexadecimal. It also displays the values of the *Carry*, *Sign*, *Zero*, *Overflow*, *Auxiliary Carry*, and *Parity flags*:
+
+```assembly
+call DumpRegs
+```
+
+```
+EAX=00000613 EBX=00000000 ECX=000000FF EDX=00000000
+ESI=00000000 EDI=00000100 EBP=0000091E ESP=000000F6
+EIP=00401026 EFL=00000286 CF=0 SF=1 ZF=0 OF=0 AF=0
+PF=1
+```
+
+The displayed value of `EIP` is the offset of the instruction following the call to `DumpRegs`. `DumpRegs` can be useful when debugging programs because it displays a snapshot of the CPU. It has no input parameters and no return value.
+
+###### GetCommandTail
+
+The `GetCommandTail` procedure copies the program's command line into a null-terminated string. If the command line was found to be empty, the *Carry flag* is set; otherwise, the *Carry flag* is cleared. This procedure is useful because it permits the user of a program to pass parameters on the command line. Suppose a program named *Encrypt.exe* reads an input file named `file1.txt` and produces an output file named `file2.txt`. The user can pass both filenames on the command line when running the program:
+
+```assembly
+Encrypt file1.txt file2.txt
+```
+
+When it starts up, the *Encrypt* program can call `GetCommandTail` and retrieve the two file-names.
+
+> [!IMPORTANT]
+> When calling `GetCommandTail`, `EDX` must contain the offset of an array of at least 129 bytes.
+
+```assembly
+.data
+  cmdTail BYTE 129 DUP(0)   ; empty buffer
+.code
+  mov  edx, OFFSET cmdTail
+  call GetCommandTail       ; fills the buffer
+```
+
+###### GetMaxXY
+
+The `GetMaxXY` procedure gets the size of the console window's buffer. If the console window buffer is larger than the visible window size, scroll bars appear automatically. `GetMaxXY` has no input parameters. When it returns, the `DX` register contains the number of buffer columns and `AX` contains the number of buffer rows. The possible range of each value can be no greater than `255`, which may be smaller than the actual window buffer size:
+
+```assembly
+.data
+  rows BYTE ?
+  cols BYTE ?
+.code
+  call GetMaxXY
+  mov  rows, al
+  mov  cols, dl
+```
+
+###### GetMseconds
+
+The `GetMseconds` procedure gets the number of milliseconds elapsed since midnight on the host computer, and returns the value in the `EAX` register. The procedure is a great tool for measuring the time between events. No input parameters are required. The following example calls `GetMseconds`, storing its return value. After the loop executes, the code call `GetMseconds` a second time and subtract the two time values. The difference is the approximate execution time of the loop:
+
+```assembly
+.data
+  startTime DWORD ?
+.code
+  call GetMseconds
+  mov  startTime, eax
+  L1:
+    ; (loop body)
+    loop L1
+    call GetMseconds
+    sub  eax, startTime   ; EAX = loop time, in milliseconds
+```
+
+###### GetTextColor
+
+The `GetTextColor` procedure gets the current foreground and background colors of the console window. It has no input parameters. It returns the background color in the upper four bits of `AL` and the foreground color in the lower four bits:
+
+```assembly
+.data
+  color byte ?
+.code
+  call GetTextColor
+  mov  color, AL
+```
+
+###### GotoXY
+
+The `GotoXY` procedure locates the cursor at a given row and column in the console window. When you call this procedure, pass the Y-coordinate (row) in `DH` and the X-coordinate (column) in `DL`:
+
+```assembly
+mov  dh, 10   ; row 10
+mov  dl, 20   ; column 20
+call GotoXY   ; locate cursor
+```
+
+The user may have resized the console window, so you can call `GetMaxXY` to find out the current number of rows and columns.
+
+###### IsDigit
+
+The `IsDigit` procedure determines whether the value in `AL` is the ASCII code for a valid decimal digit. When calling it, pass an ASCII character code in `AL`. The procedure sets the *Zero flag* if `AL` contains a valid decimal digit; otherwise, it clears the *Zero flag*:
+
+```assembly
+mov  AL, somechar
+call IsDigit
+```
+
+###### MsgBox
+
+The `MsgBox` procedure displays a graphical popup message box with an optional caption. Pass it the offset of a string in `EDX`, which will appear inside the box. Optionally, pass the offset of a string for the box's title in `EBX`. To leave the title blank, set `EBX` to zero:
+
+```assembly
+.data
+  caption BYTE "Dialog Title", 0
+  HelloMsg BYTE "This is a pop-up message box.", 0dh, 0ah
+           BYTE "Click OK to continue...", 0
+.code
+  mov  ebx, OFFSET caption
+  mov  edx, OFFSET HelloMsg
+  call MsgBox
+```
+
+###### MsgBoxAsk
+
+The `MsgBoxAsk` procedure displays a graphical popup message box with Yes and No buttons. Pass it the offset of a question string in `EDX`, which will appear inside the box. Optionally, pass the offset of a string for the box's title in `EBX`. To leave the title blank, set `EBX` to zero. `MsgBoxAsk` returns an integer in `EAX` that tells you which button was selected by the user. The value will be one of two predefined Windows constants: `IDYES` (equal to `6`) or `IDNO` (equal to `7`):
+
+```assembly
+.data
+  caption BYTE "Survey Completed", 0
+  question BYTE "Thank you for completing the survery."
+           BYTE 0dh, 0ah
+           BYTE "would you like to receive the results?", 0
+.code
+  mov  ebx, OFFSET caption
+  mov  edx, OFFSET question
+  call MsgBoxAsk
+  ; (check return value in EAX)
+```
+
+###### OpenInputFile
+
+The `OpenInputFile` procedure opens an existing file for input. Pass it the offset of a filename in `EDX`. When it returns, if the file was opened successfully, `EAX` will contain a valid file handle. Otherwise, `EAX` will equal `INVALID_HANDLE_VALUE` (a predefined constant).
+
+```assembly
+.data
+  filename BYTE "myfile.txt", 0
+.code
+  mov  edx, OFFSET filename
+  call OpenInputFile
+```
+
+###### ParseDecimal32
+
+The `ParseDecimal32` procedure converts an unsigned decimal integer string to 32-bit binary. All valid digits occurring before a nonnumeric character are converted. Leading spaces are ignored. Pass it the offset of a string in `EDX` and the string's length in ECX. The binary value is returned in `EAX`:
+
+```assembly
+.data
+  buffer BYTE "8193"
+  buffSize = ($ - buffer)
+.code
+  mov  edx, OFFSET buffer
+  mov  ecx, buffSize
+  call ParseDecimal32       ; returns EAX
+```
+
+- If the integer is blank, `EAX = 0` and `CF = 1`
+- If the integer contains only spaces, `EAX = 0` and `CF = 1`
+- If the integer is larger than $2^{32} - 1$, `EAX = 0` and `CF = 1`
+- Otherwise, `EAX` contains the converted integer and `CF = 0`
+
+###### ParseInteger32
+
+The `ParseInteger32` procedure converts a signed decimal integer string to 32-bit binary. All valid digits from the beginning of the string to the first nonnumeric character are converted. Leading spaces are ignored. Pass it the offset of a string in `EDX` and the string's length in `ECX`. The binary value is returned in `EAX`:
+
+```assembly
+.data
+  buffer BYTE "-8193"
+  buffSize = ($ - buffer)
+.code
+  mov  edx, OFFSET buffer
+  mov  ecx, buffSize
+  call ParseInteger32       ; returns EAX
+```
+
+The string may contain an optional leading plus or minus sign, followed only by decimal digits. The Overflow flag is set and an error message is displayed on the console if the value cannot be represented as a 32-bit signed integer (range: `-2,147,483,648` to `+2,147,483,647`)
+
+###### Random32
+
+The `Random32` procedure generates and returns a 32-bit pseudo-random integer in `EAX`. When called repeatedly, `Random32` generates a simulated random sequence. The numbers are created using a simple function having an input called a seed. The function uses the seed in a formula that generates the first random value. Subsequent random values are generated using each previously generated random value as their seeds. The following code snippet shows a sample call to `Random32`:
+
+```assembly
+.data
+  randVal DWORD ?
+.code
+  call Random32
+  mov  randVal, eax
+```
+
+###### Randomize
+
+The Randomize procedure initializes the starting seed value of the `Random32` and `RandomRange` procedures. The seed equals the time of day, accurate to 1/100 of a second. Each time you run a program that calls `Random32` and `RandomRange`, the generated sequence of random numbers will be unique. You need only to call `Randomize` once at the beginning of a program. The following example produces 10 random integers:
+
+```assembly
+call Randomize
+mov  ecx, 10
+L1: call Random32
+
+    ; use or display random value in EAX here...
+
+    loop L1
+```
+
+###### RandomRange
+
+The `RandomRange` procedure produces a random integer within the range of `0` to `n - 1`, where `n` is an input parameter passed in the `EAX` register. The random integer is returned in `EAX`. The following example generates a single random integer between `0` and `4999` and places it in a variable named `randVal`.
+
+```assembly
+.data
+  randVal DWORD ?
+.code
+  mov  eax, 5000
+  call RandomRange
+  mov  randVal, eax
+```
+
+###### ReadChar
+
+The `ReadChar` procedure reads a single character from the keyboard and returns the character in the `AL` register. The character is not echoed in the console window:
+
+```assembly
+.data
+  char BYTE ?
+.code
+  call ReadChar
+  mov  char, al
+```
+
+If the user presses an extended key such as a function key, arrow key, Ins, or Del, the procedure sets `AL` to zero, and `AH` contains a keyboard scan code. The upper half of `EAX` is not preserved.
+
+###### ReadDec
+
+The `ReadDec` procedure reads a 32-bit unsigned decimal integer from the keyboard and returns the value in `EAX`. Leading spaces are ignored. The return value is calculated from all valid digits found until a nondigit character is encountered. For example, if the user enters `123ABC`, the value returned in `EAX` is `123`:
+
+```assembly
+.data
+  intVal DWORD ?
+.code
+  call ReadDec
+  mov  intVal, eax
+```
+
+`ReadDec` affects the Carry flag in the following ways:
+
+- If the integer is blank, `EAX = 0` and `CF = 1`
+- If the integer is larger than $2^{32} - 1$, `EAX = 0` and `CF = 1`
+- Otherwise, EAX holds the converted integer and `CF = 0`
+
+###### ReadFromFile
+
+The `ReadFromFile` procedure reads an input disk file into a memory buffer. When you call `ReadFromFile`, pass it an open file handle in `EAX`, the offset of a buffer in `EDX`, and the maximum number of bytes to read in `ECX`. When `ReadFromFile` returns, check the value of the Carry flag: If `CF` is clear, `EAX` contains a count of the number of bytes read from the file. But if `CF` is set, `EAX` contains a numeric system error code. You can call the `WriteWindowsMsg` procedure to get a text representation of the error. In the following example, as many as `5000` bytes are copied from the file into the buffer variable. We assume that a file is already open, and `EAX` contains its file handle:
+
+```assembly
+.data
+  BUFFER_SIZE = 5000
+  buffer BYTE BUFFER_SIZE DUP(?)
+  bytesRead DWORD ?
+
+.code
+  mov  edx, OFFSEET buffer  ; points to buffer
+  mov  ecx, BUFFER_SIZE     ; max bytes to read
+  call ReadFromFile         ; read the file
+```
+
+If the *Carry flag* were clear at this point, you could execute the following instruction:
+
+```assembly
+mov bytesRead, eax  ; count of bytes actually read
+```
+
+But if the *Carry flag* were set, you would call `WriteWindowsMsg` procedure, which displays a string that contains the error code and description of the most recent error generated by the application:
+
+```assembly
+call WriteWindowsMsg
+```
+
+###### ReadHex
+
+The `ReadHex` procedure reads a 32-bit hexadecimal integer from the keyboard and returns the corresponding binary value in `EAX`. No error checking is performed for invalid characters. You can use both uppercase and lowercase letters for the digits `A` through `F`. A maximum of eight digits may be entered (additional characters are ignored). Leading spaces are ignored:
+
+```assembly
+.data
+  hexVal DWORD ?
+.code
+  call ReadHex
+  mov  hexVal, eax
+```
+
+###### ReadInt
+
+The `ReadInt` procedure reads a 32-bit signed integer from the keyboard and returns the value in `EAX`. The user can type an optional leading plus or minus sign, and the rest of the number may only consist of digits. `ReadInt` sets the *Overflow flag* and display an error message if the value entered cannot be represented as a 32-bit signed integer (range: `-2,147,483,648` to `+2,147,483,647`). The return value is calculated from all valid digits found until a nondigit character is encountered. For example, if the user enters `+123ABC`, the value returned is `+123`:
+
+```assembly
+.data
+  intVal SDWORD ?
+.code
+  call ReadInt
+  mov  intVal, eax
+```
+
+###### ReadKey
+
+The `ReadKey` procedure performs a no-wait keyboard check. In other words, it inspects the keyboard input buffer to see if a key has been pressed by the user. If no keyboard data is found, the *Zero flag* is set. If a keypress is found by `ReadKey`, the *Zero flag* is cleared and `AL` is assigned either zero or an ASCII code. If `AL` contains zero, the user may have pressed a special key. The `AH` register contains a virtual scan code, `DX` contains a virtual key code, and `EBX` contains the keyboard flag bits.
+
+The upper halves of `EAX` and `EDX` are overwritten when `ReadKey` is called.
+
+###### ReadString
+
+The `ReadString` procedure reads a string from the keyboard, stopping when the user presses the Enter key. Pass the offset of a buffer in `EDX` and set `ECX` to the maximum number of characters the user can enter, plus `1`. The procedure returns the count of the number of characters typed by the user in `EAX`:
+
+```assembly
+.data
+  buffer BYTE 21 DUP(0)
+  byteCount DWORD ?
+.code
+  mov  edx, OFFSET buffer   ; point to the buffer
+  mov  ecx, SIZEOF buffer   ; specify max characters
+  call ReadString           ; input the string
+  mov  byteCount, eax       ; number of characters
+```
+
+`ReadString` automatically inserts a null terminator in memory at the end of the string. The following is a hexadecimal and ASCII dump of the first 8 bytes of buffer after the user has entered the string "ABCDEFG":
+
+```
+41 42 43 44 45 46 47 00     ABCDEFG
+```
+
+###### SetTextColor
+
+The `SetTextColor` procedure (Irvine32 library only) sets the foreground and background colors for text output. When calling `SetTextColor`, assign a color attribute to `EAX`. The following predefined color constants can be used for both foreground and background:
+
+| Color        | Value |
+| ------------ | ----- |
+| black        | 0     |
+| blue         | 1     |
+| green        | 2     |
+| cyan         | 3     |
+| red          | 4     |
+| magenta      | 5     |
+| brown        | 6     |
+| lightGray    | 7     |
+| gray         | 8     |
+| lightBlue    | 9     |
+| lightGreen   | 10    |
+| lightCyan    | 11    |
+| lightRed     | 12    |
+| lightMagenta | 13    |
+| yellow       | 14    |
+| white        | 15    |
+
+Color constants are defined in the *Irvine32.inc* file. To get a complete color byte value, multiply the background color by `16` and add it to the foreground color. The following constant, for example, indicates yellow characters on a blue background:
+
+```assembly
+yellow + (blue * 16)
+```
+
+The following statements set the color to white on a blue background:
+
+```assembly
+mov  eax, white + (blue * 16)
+call SetTextColor
+```
+
+An alternative way to express color constants is to use the `SHL` operator. You shift the background color leftward by `4` bits before adding it to the foreground color.
+
+```assembly
+yellow + (blue SHL 4)
+```
+
+The bit shifting is performed at assembly time, so `SHL` can only have constant operands.
+
+###### Str_length
+
+The `Str_length` procedure returns the length of a null-terminated string. Pass the string's offset in `EDX`. The procedure returns the string's length in `EAX`:
+
+```assembly
+.data
+  buffer BYTE "abcde", 0
+  bufLength DWORD ?
+.code
+  mov  edx, OFFSET buffer   ; point to string
+  call Str_length           ; EAX = 5
+  mov  bufLength, eax       ; save length
+```
+
+###### WaitMsg
+
+The `WaitMsg` procedure displays the message *"Press any key to continue..."* and waits for the user to press a key. This procedure is useful when you want to pause the screen display before data scrolls off and disappears. It has no input parameters:
+
+```assembly
+call WaitMsg
+```
+
+###### WriteBin
+
+The `WriteBin` procedure writes an integer to the console window in ASCII binary format. Pass the integer in `EAX`. The binary bits are displayed in groups of four for easy reading:
+
+```assembly
+mov  eax, 12346AF9h
+call WriteBin
+```
+
+The following output would be displayed by our sample code:
+
+```
+0001 0010 0011 0100 0110 1010 1111 1001
+```
+
+###### WriteBinB
+
+The `WriteBinB` procedure writes a 32-bit integer to the console window in ASCII binary format. Pass the value in the `EAX` register and let `EBX` indicate the display size in bytes (`1`, `2`, or `4`). The bits are displayed in groups of four for easy reading:
+
+```assembly
+mov  eax, 00001234h
+mov  ebx, TYPE WORD   ; 2 bytes
+call WriteBinB        ; displays 0001 0010 0011 0100
+```
+
+###### WriteChar
+
+The `WriteChar` procedure writes a single character to the console window. Pass the character (or its ASCII code) in `AL`:
+
+```assembly
+mov  al, 'A'
+call WriteChar  ; displays: "A"
+```
+
+###### WriteDec
+
+The `WriteDec` procedure writes a 32-bit unsigned integer to the console window in decimal format with no leading zeros. Pass the integer in `EAX`:
+
+```assembly
+mov  eax, 295
+call WriteDec   ; displays: "295"
+```
+
+###### WriteHex
+
+The `WriteHex` procedure writes a 32-bit unsigned integer to the console window in 8-digit hexadecimal format. Leading zeros are inserted if necessary. Pass the integer in `EAX`:
+
+```assembly
+mov  eax, 7FFFh
+call WriteHex     ; displays: "00007FFF"
+```
+
+###### WriteHexB
+
+The `WriteHexB` procedure writes a 32-bit unsigned integer to the console window in hexadecimal format. Leading zeros are inserted if necessary. Pass the integer in `EAX` and let `EBX` indicate the display format in bytes (`1`, `2`, or `4`):
+
+```assembly
+mov  eax, 7FFFh
+mov  ebx, TYPE WORD   ; 2 bytes
+call WriteHexB        ; displays: "7FFF"
+```
+
+###### WriteInt
+
+The `WriteInt` procedure writes a 32-bit signed integer to the console window in decimal format with a leading sign and no leading zeros. Pass the integer in `EAX`:
+
+```assembly
+mov  eax, 216543
+call WriteInt     ; displays: "+216543"
+```
+
+###### WriteString
+
+The `WriteString` procedure writes a null-terminated string to the console window. Pass the string's offset in `EDX`:
+
+```assembly
+.data
+  prompt BYTE "Enter your name:", 0
+.code
+  mov  edx, OFFSET prompt
+  call WriteString
+```
+
+###### WriteToFile
+
+The `WriteToFile` procedure writes the contents of a buffer to an output file. Pass it a valid open file handle in `EAX`, the offset of the buffer in `EDX`, and the number of bytes to write in `ECX`. When the procedure returns, if `EAX` is greater than zero, it contains a count of the number of bytes written; otherwise, an error occurred. The following code calls `WriteToFile`:
+
+```assembly
+BUFFER_SIZE = 5000
+.data
+  fileHandle DWORD ?
+  buffer     BYTE BUFFER_SIZE DUP(?)
+.code
+  mov  eax, fileHandle
+  mov  edx, OFFSET buffer
+  mov  ecx, BUFFER_SIZE
+  call WriteToFile
+```
+
+###### WriteWindowsMsg
+
+The `WriteWindowsMsg` procedure writes a string containing the most recent error generated by your application to the Console window when executing a call to a system function:
+
+```assembly
+call WriteWindowsMsg
+```
+
+The following is an example of a message string:
+
+```
+Error 2: The system cannot find the file specified.
+```
+
+###### Library Test Programs
+
+###### Tutorial: Library Test #1
+
+The program [InputLoop](./chapter5/InputLoop.asm) makes use of integer input–output with screen colors.
+
+###### Library Test #2: Random Integers
+
+The program ['](./chapter5/'.asm) demonstrates random-number-generation capabilities of the link library. First, it randomly generates 10 unsigned integers in the range `0` to `4,294,967,294`. Next, it generates 10 signed integers in the range `-50` to `+49`
+
+###### Library Test #3: Performance Timing
+
+The program [TestLib3](./chapter5/TestLib3.asm) calls `GetMseconds`, execute a nested loop, and call `GetMSeconds` a second time. The difference between the two values returned by these procedure calls gives us the elapsed time of the nested loop.
+
+###### Detailed Analysis of the Program
+
+#### Page 541-547
+
+###### 64-Bit Assembly Programming
+
+###### Calling 64-Bit Subroutines
+
+If you want to call a subroutine you have created, or a subroutine in the Irvine64 library, all you have to do is place input parameters in registers and execute the `CALL` instruction:
+
+```assembly
+mov  rax, 12345678h
+call WriteHex64
+```
+
+The `PROTO` directive must be added at the top of your program to identify each procedure you plan to call that's outside your own program:
+
+```assembly
+ExitProcess PROTO   ; located in the Windows API
+WriteHex64 PROTO    ; located in the Irvine64 library
+```
+
+###### The x64 Calling Convention
+
+Microsoft follows the *Microsoft x64 Calling Convention* for passing parameters and calling procedures in 64-bit programs. This convention is used by C/C++ compilers, as well as by the Windows Application Programming Interface (API). You need to use this calling convention when you call a function in the Windows API, or a function written in C or C++. Here are some of the basic characteristics of this calling convention:
+
+1. The `CALL` instruction subtracts `8` from the `RSP` (stack pointer) register, since addresses are 64-bits long.
+2. The first four parameters passed to a procedure are placed in the `RCX`, `RDX`, `R8`, and `R9`, registers, in that order. If only one parameter is passed, it will be placed in `RCX`. If there is a second parameter, it will be placed in `RDX`, and so on. Additional parameters are pushed on the stack, in left-to-right order.
+3. It is the caller's responsibility to allocate at least `32` bytes of shadow space on the runtime stack, so the called procedures can optionally save the register parameters in this area.
+4. When calling a subroutine, the stack pointer (`RSP`) must be aligned on a 16-byte boundary (a multiple of `16`). The `CALL` instruction pushes an 8-byte return address on the stack, so the calling program must subtract `8` from the stack pointer, in addition to the `32` it already subtracts for the shadow space.
+
+###### Sample Program that Calls a Procedure
+
+The program [CallProc_64](./chapter5/CallProc_64.asm) uses the Microsoft x64 calling convention to call a subroutine named AddFour. This subroutine adds the values in the four parameter registers (`RCX`, `RDX`, `R8`, and `R9`) and saves the sum in `RAX`. Because procedures normally return integer values in RAX, the calling program expects that value to be in this register when the subroutine returns. In this way, we can say that the subroutine is a function, because it receives four inputs and (deterministically) produces a single output.
+
+Line `10` aligns the stack pointer to an even 16-byte boundary. Before the OS called main, we assume the stack pointer was aligned on a 16-byte boundary. Then, when the operating system started our program by calling the main procedure, the `CALL` instruction pushed an 8-byte return address on stack. Subtracting another `8` from the stack pointer drops it down to a multiple of `16`.
+
+Rather than calling `ExitProcess` to end the program, we might have chosen to execute a `RET` instruction, which would return to the process that launched our program. It would require, however, that we restore the stack pointer to the way it was when the main procedure began to execute. The following lines would be the replacement for lines `21``–22` of the `CallProc_64` program:
+
+```assembly
+add rsp, 28h ; restore the stack pointer
+mov ecx, 0   ; process return code
+ret          ; return to the OS
+```
